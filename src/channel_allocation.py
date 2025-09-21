@@ -7,10 +7,11 @@ from pygame.locals import *
 
 base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 Image_list = [
-    os.path.join(base_dir, "assets", "win1984.png"),
     os.path.join(base_dir, "assets", "win1991.jpg"),
     os.path.join(base_dir, "assets", "win2021.jpg"),
-    os.path.join(base_dir, "assets", "win2036.jpg"),
+    # os.path.join(base_dir, "assets", "win2036.jpg"),
+    os.path.join(base_dir, "assets", "win2025.jpg"),
+    os.path.join(base_dir, "assets", "win1984.png"),
 ]
 
 
@@ -194,6 +195,86 @@ class App:
             self.histogram_surface = pygame.Surface((int(self.histogram_area.width), 200))
             self.histogram_surface.fill((60, 60, 60))
 
+    def process_image(self, img_array, process_type="original"):
+        """
+        Обрабатывает изображение в зависимости от типа обработки
+        Args:
+            img_array: numpy array изображения
+            process_type: тип обработки ("original", "red", "green", "blue")
+        Returns:
+            обработанный numpy array
+        """
+
+        if process_type == "original":
+            return img_array.copy()
+        # red -> 0, green -> 1, blue -> 2
+        elif process_type == "red":
+            processed = img_array.copy()
+            if len(processed.shape) == 3:
+                processed[:, :, 1] = 0
+                processed[:, :, 2] = 0
+            return processed
+        elif process_type == "green":
+            processed = img_array.copy()
+            if len(processed.shape) == 3:
+                processed[:, :, 0] = 0
+                processed[:, :, 2] = 0
+            return processed
+        elif process_type == "blue":
+            processed = img_array.copy()
+            if len(processed.shape) == 3:
+                processed[:, :, 0] = 0
+                processed[:, :, 1] = 0
+            return processed
+        return img_array.copy()
+
+    def create_processed_surfaces(self):
+        """Создает 4 обработанные версии текущего изображения"""
+        if not self.images or self.selected_image_index >= len(self.images):
+            return []
+
+        base_img = self.images[self.selected_image_index].copy()
+        process_types = ["original", "red", "green", "blue"]
+        processed_surfaces = []
+
+        for process_type in process_types:
+            processed_img = self.process_image(base_img, process_type)
+
+            # Убеждаемся что массив имеет правильный тип и размерность
+            if len(processed_img.shape) == 2:  # Grayscale
+                processed_img = np.stack([processed_img] * 3, axis=-1)
+
+            # Нормализуем значения к диапазону 0-255
+            if processed_img.dtype != np.uint8:
+                processed_img = np.clip(processed_img, 0, 255).astype(np.uint8)
+
+            # Проверяем размерность массива
+            if len(processed_img.shape) != 3 or processed_img.shape[2] not in [3, 4]:
+                print(f"Неправильная размерность массива: {processed_img.shape}")
+                # Создаем заглушку
+                processed_img = np.zeros((100, 100, 3), dtype=np.uint8)
+
+            try:
+                # Создаем pygame surface через разные подходы
+                if processed_img.shape[2] == 3:  # RGB
+                    surf = pygame.surfarray.make_surface(processed_img.swapaxes(0, 1))
+                else:  # RGBA
+                    surf = pygame.surfarray.make_surface(processed_img[:, :, :3].swapaxes(0, 1))
+
+                scaled_surf = pygame.transform.scale(surf, (self.thumb_width, self.thumb_height))
+                processed_surfaces.append(scaled_surf)
+
+            except Exception as e:
+                print(f"Ошибка создания surface для {process_type}: {e}")
+                print(f"Форма массива: {processed_img.shape}, тип: {processed_img.dtype}")
+
+                # Создаем заглушку
+                fallback_surf = pygame.Surface((self.thumb_width, self.thumb_height))
+                fallback_surf.fill((100, 100, 100))  # Серый цвет
+                processed_surfaces.append(fallback_surf)
+
+        return processed_surfaces
+
     def draw_interface(self):
         """
         Отрисовка интерфейса
@@ -207,13 +288,26 @@ class App:
 
         # Отрисовка текущего изображения
         if self.image_surfaces and self.selected_image_index < len(self.image_surfaces):
-            img_surf = self.image_surfaces[self.selected_image_index]
+            processed_surfaces = self.create_processed_surfaces()
 
-            # Центрируем изображение в левой области
-            img_x = self.images_area.x + (self.images_area.width - img_surf.get_width()) // 2
-            img_y = self.images_area.y + 50
+            if processed_surfaces:
+                # Заголовки для каждой версии
+                titles = ["Оригинал", "Только Красный", "Только Зеленый", "Только Синий"]
 
-            self.screen.blit(img_surf, (img_x, img_y))
+                # Располагаем изображения в сетке 2x2
+                for i, (surf, title) in enumerate(zip(processed_surfaces, titles)):
+                    row = i // 2
+                    col = i % 2
+
+                    x = self.images_area.x + 10 + col * (self.thumb_width + 20)
+                    y = self.images_area.y + 40 + row * (self.thumb_height + 40)
+
+                    # Рисуем изображение
+                    self.screen.blit(surf, (x, y))
+
+                    # Рисуем заголовок
+                    title_surf = self.font_small.render(title, True, self.colors['text'])
+                    self.screen.blit(title_surf, (x, y - 20))
 
             # Информация об изображении
             info_text = f"Изображение {self.selected_image_index + 1}/{len(self.image_surfaces)}"
