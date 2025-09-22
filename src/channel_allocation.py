@@ -9,9 +9,10 @@ base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 Image_list = [
     os.path.join(base_dir, "assets", "win1991.jpg"),
     os.path.join(base_dir, "assets", "win2021.jpg"),
-    # os.path.join(base_dir, "assets", "win2036.jpg"),
+    os.path.join(base_dir, "assets", "win2036.jpg"),
     os.path.join(base_dir, "assets", "win2025.jpg"),
-    os.path.join(base_dir, "assets", "win1984.png"),
+    # os.path.join(base_dir, "assets", "win1984.png"),
+    # os.path.join(base_dir, "assets", "win2077.jpg"),
 ]
 
 
@@ -59,7 +60,7 @@ class App:
         self.images = []
         self.image_size = (200, 150)
         self.image_surfaces = []
-        self.histogram_surface = None
+        self.histogram_surfaces = []
         self.selected_image_index = 0
         self.current_image_path = None
 
@@ -147,53 +148,91 @@ class App:
             print(f"Ошибка загрузки {path}: {e}")
             return False
 
-    def create_histogram(self):
+    def create_histograms(self):
         """
-        Создает гистограмму для текущего изображения
+        Создает 4 гистограммы для текущего изображения:
+        - 3 отдельные гистограммы для каждого цветового канала
+        - 1 совмещенная гистограмма со всеми тремя каналами
         """
         if not self.images or self.selected_image_index >= len(self.images):
-            return
+            return []
 
         try:
             img = self.images[self.selected_image_index]
 
-            fig, ax = plt.subplots(figsize=(5, 5))
+            # Нормализуем значения, если они в диапазоне [0, 1]
+            if abs(int(img[:, :, 0][0][0]) - img[:, :, 0][0][0]) > 0.0001:
+                img = img.copy()
+                img *= 255
 
-            print(img.shape)
-            # contains normalized rbg values
-            if abs(int(img[:,:, 0][0][0]) - img[:,:, 0][0][0]) > 0.0001:
-                img[:,:] *= 255
-                # print(img[:,:,0][0][0])
+            histogram_surfaces = []
 
-            if len(img.shape) == 3:  # КПИ цветного изображения
+            if len(img.shape) == 3:  # Цветное изображение
                 colors = ['red', 'green', 'blue']
+                color_names = ['Красный', 'Зеленый', 'Синий']
+
+                # Создаем 3 отдельные гистограммы для каждого канала
+                for i, (color, name) in enumerate(zip(colors, color_names)):
+                    fig, ax = plt.subplots(figsize=(2, 3))
+                    ax.hist(img[:, :, i].flatten(), bins=255, alpha=0.8, color=color, density=True)
+                    # ax.set_xlabel('Значение пикселя', fontsize=8)
+                    # ax.set_ylabel('Плотность', fontsize=8)
+                    ax.set_title(f'{name} канал', fontsize=9)
+                    ax.tick_params(axis='both', which='major', labelsize=7)
+                    plt.tight_layout()
+
+                    # Конвертируем в pygame surface
+                    fig.canvas.draw()
+                    buf = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+                    buf = buf.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+
+                    histogram_surf = pygame.surfarray.make_surface(buf.swapaxes(0, 1))
+                    # Масштабируем под размер области
+                    scaled_surf = pygame.transform.scale(
+                        histogram_surf,
+                        (int(self.histogram_area.width // 2 - 15), int(self.histogram_area.height // 2 - 40))
+                    )
+                    histogram_surfaces.append(scaled_surf)
+                    plt.close(fig)
+
+                # Создаем совмещенную гистограмму
+                fig, ax = plt.subplots(figsize=(2, 3))
                 for i, color in enumerate(colors):
-                    ax.hist(img[:, :, i].flatten(), bins=50, alpha=0.7, color=color, density=True)
-            else:  # Черно-белое изображение хз
-                ax.hist(img.flatten(), bins=50, alpha=0.7, color='gray', density=True)
+                    ax.hist(img[:, :, i].flatten(), bins=255, alpha=0.6, color=color,
+                            density=True, label=color_names[i])
 
-            ax.set_xlabel('Значение пикселя')
-            ax.set_ylabel('Плотность')
+                # ax.set_xlabel('Значение пикселя', fontsize=8)
+                # ax.set_ylabel('Плотность', fontsize=8)
+                ax.set_title('Совмещенные каналы', fontsize=9)
+                ax.legend(fontsize=7)
+                ax.tick_params(axis='both', which='major', labelsize=7)
+                plt.tight_layout()
 
-            # Сохраняем в память
-            fig.canvas.draw()
-            buf = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
-            buf = buf.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+                # Конвертируем в pygame surface
+                fig.canvas.draw()
+                buf = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+                buf = buf.reshape(fig.canvas.get_width_height()[::-1] + (3,))
 
-            # Конвертируем в pygame surface
-            histogram_surf = pygame.surfarray.make_surface(buf.swapaxes(0, 1))
-            self.histogram_surface = pygame.transform.scale(
-                histogram_surf,
-                (int(self.histogram_area.width), int(self.histogram_area.height - 400))
-            )
+                histogram_surf = pygame.surfarray.make_surface(buf.swapaxes(0, 1))
+                scaled_surf = pygame.transform.scale(
+                    histogram_surf,
+                    (int(self.histogram_area.width // 2 - 15), int(self.histogram_area.height // 2 - 40))
+                )
+                histogram_surfaces.append(scaled_surf)
+                plt.close(fig)
 
-            plt.close(fig)  # Закрываем фигуру для экономии памяти
+            return histogram_surfaces
 
         except Exception as e:
-            print(f"Ошибка создания гистограммы: {e}")
-            # Создаем заглушку
-            self.histogram_surface = pygame.Surface((int(self.histogram_area.width), 200))
-            self.histogram_surface.fill((60, 60, 60))
+            print(f"Ошибка создания гистограмм: {e}")
+            # Создаем заглушки
+            histogram_surfaces = []
+            for i in range(4):
+                fallback_surf = pygame.Surface((int(self.histogram_area.width // 2 - 15),
+                                                int(self.histogram_area.height // 2 - 40)))
+                fallback_surf.fill((60, 60, 60))
+                histogram_surfaces.append(fallback_surf)
+            return histogram_surfaces
 
     def process_image(self, img_array, process_type="original"):
         """
@@ -213,6 +252,7 @@ class App:
             if len(processed.shape) == 3:
                 processed[:, :, 1] = 0
                 processed[:, :, 2] = 0
+            plt.imsave(arr=processed, fname=os.path.join(base_dir, "assets", 'red.jpg'))
             return processed
         elif process_type == "green":
             processed = img_array.copy()
@@ -239,20 +279,6 @@ class App:
 
         for process_type in process_types:
             processed_img = self.process_image(base_img, process_type)
-
-            # Убеждаемся что массив имеет правильный тип и размерность
-            if len(processed_img.shape) == 2:  # Grayscale
-                processed_img = np.stack([processed_img] * 3, axis=-1)
-
-            # Нормализуем значения к диапазону 0-255
-            if processed_img.dtype != np.uint8:
-                processed_img = np.clip(processed_img, 0, 255).astype(np.uint8)
-
-            # Проверяем размерность массива
-            if len(processed_img.shape) != 3 or processed_img.shape[2] not in [3, 4]:
-                print(f"Неправильная размерность массива: {processed_img.shape}")
-                # Создаем заглушку
-                processed_img = np.zeros((100, 100, 3), dtype=np.uint8)
 
             try:
                 # Создаем pygame surface через разные подходы
@@ -314,14 +340,27 @@ class App:
             text_surf = self.font_medium.render(info_text, True, self.colors['text'])
             self.screen.blit(text_surf, (self.images_area.x + 10, self.images_area.y + 10))
 
-        # Отрисовка гистограммы
-        if self.histogram_surface:
-            hist_y = self.histogram_area.y + 50
-            self.screen.blit(self.histogram_surface, (self.histogram_area.x, hist_y))
+            # Отрисовка четырех гистограмм
+            if self.histogram_surfaces:
+                histogram_titles = ["Красный канал", "Зеленый канал", "Синий канал", "Совмещенная"]
 
-        # Заголовок области гистограммы
-        hist_title = self.font_medium.render("Гистограмма", True, self.colors['text'])
-        self.screen.blit(hist_title, (self.histogram_area.x + 10, self.histogram_area.y + 10))
+                for i, (hist_surf, title) in enumerate(zip(self.histogram_surfaces, histogram_titles)):
+                    row = i // 2
+                    col = i % 2
+
+                    x = self.histogram_area.x + 5 + col * (hist_surf.get_width() + 10)
+                    y = self.histogram_area.y + 35 + row * (hist_surf.get_height() + 25)
+
+                    # Рисуем гистограмму
+                    self.screen.blit(hist_surf, (x, y))
+
+                    # Рисуем заголовок
+                    title_surf = self.font_small.render(title, True, self.colors['text'])
+                    self.screen.blit(title_surf, (x, y - 15))
+
+            # Заголовок области гистограммы
+            hist_title = self.font_medium.render("Гистограммы каналов (Цвет / Вероятность)", True, self.colors['text'])
+            self.screen.blit(hist_title, (self.histogram_area.x + 10, self.histogram_area.y + 10))
 
         # Инструкции
         instructions = [
@@ -350,7 +389,7 @@ class App:
                     new_index = event.key - K_1
                     if new_index < len(self.image_surfaces):
                         self.selected_image_index = new_index
-                        self.create_histogram()  # Пересоздаем гистограмму для нового изображения
+                        self.histogram_surfaces = self.create_histograms()  # Пересоздаем гистограммы
 
     def main_loop(self):
         """
@@ -359,9 +398,9 @@ class App:
         # Загружаем изображения
         self.load_images()
 
-        # Создаем начальную гистограмму
+        # Создаем начальные гистограммы
         if self.images:
-            self.create_histogram()
+            self.histogram_surfaces = self.create_histograms()
 
         self.running = True
         clock = pygame.time.Clock()
