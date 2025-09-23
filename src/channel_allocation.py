@@ -175,18 +175,20 @@ class App:
                 for i, (color, name) in enumerate(zip(colors, color_names)):
                     fig, ax = plt.subplots(figsize=(2, 3))
                     ax.hist(img[:, :, i].flatten(), bins=255, alpha=0.8, color=color, density=True)
-                    # ax.set_xlabel('Значение пикселя', fontsize=8)
-                    # ax.set_ylabel('Плотность', fontsize=8)
                     ax.set_title(f'{name} канал', fontsize=9)
                     ax.tick_params(axis='both', which='major', labelsize=7)
                     plt.tight_layout()
 
                     # Конвертируем в pygame surface
                     fig.canvas.draw()
-                    buf = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
-                    buf = buf.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+                    buf = np.frombuffer(fig.canvas.buffer_rgba(), dtype=np.uint8)
+                    width, height = fig.canvas.get_width_height()
+                    buf = buf.reshape(height, width, 4)  # RGBA формат
 
-                    histogram_surf = pygame.surfarray.make_surface(buf.swapaxes(0, 1))
+                    # Конвертируем в RGB для pygame (убираем альфа-канал)
+                    rgb_buf = buf[:, :, :3]
+                    histogram_surf = pygame.surfarray.make_surface(rgb_buf.swapaxes(0, 1))
+
                     # Масштабируем под размер области
                     scaled_surf = pygame.transform.scale(
                         histogram_surf,
@@ -201,8 +203,6 @@ class App:
                     ax.hist(img[:, :, i].flatten(), bins=255, alpha=0.6, color=color,
                             density=True, label=color_names[i])
 
-                # ax.set_xlabel('Значение пикселя', fontsize=8)
-                # ax.set_ylabel('Плотность', fontsize=8)
                 ax.set_title('Совмещенные каналы', fontsize=9)
                 ax.legend(fontsize=7)
                 ax.tick_params(axis='both', which='major', labelsize=7)
@@ -210,10 +210,14 @@ class App:
 
                 # Конвертируем в pygame surface
                 fig.canvas.draw()
-                buf = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
-                buf = buf.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+                buf = np.frombuffer(fig.canvas.buffer_rgba(), dtype=np.uint8)
+                width, height = fig.canvas.get_width_height()
+                buf = buf.reshape(height, width, 4)  # RGBA формат
 
-                histogram_surf = pygame.surfarray.make_surface(buf.swapaxes(0, 1))
+                # Конвертируем в RGB для pygame (убираем альфа-канал)
+                rgb_buf = buf[:, :, :3]
+                histogram_surf = pygame.surfarray.make_surface(rgb_buf.swapaxes(0, 1))
+
                 scaled_surf = pygame.transform.scale(
                     histogram_surf,
                     (int(self.histogram_area.width // 2 - 15), int(self.histogram_area.height // 2 - 40))
