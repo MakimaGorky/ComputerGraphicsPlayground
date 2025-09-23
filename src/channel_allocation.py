@@ -10,8 +10,8 @@ Image_list = [
     os.path.join(base_dir, "assets", "win1991.jpg"),
     os.path.join(base_dir, "assets", "win2021.jpg"),
     os.path.join(base_dir, "assets", "win2036.jpg"),
-    os.path.join(base_dir, "assets", "win2025.jpg"),
-    # os.path.join(base_dir, "assets", "win1984.png"),
+    # os.path.join(base_dir, "assets", "win2025.jpg"),
+    os.path.join(base_dir, "assets", "win1984.png"),
     # os.path.join(base_dir, "assets", "win2077.jpg"),
 ]
 
@@ -159,6 +159,10 @@ class App:
 
         try:
             img = self.images[self.selected_image_index]
+            # print(np.unique(img[:, :, 0]).size)
+            # print(np.unique(img[:, :, 1]).size)
+            # print(np.unique(img[:, :, 2]).size)
+            # print(img[:, :, 1])
 
             # Нормализуем значения, если они в диапазоне [0, 1]
             if abs(int(img[:, :, 0][0][0]) - img[:, :, 0][0][0]) > 0.0001:
@@ -250,6 +254,10 @@ class App:
             обработанный numpy array
         """
 
+        if abs(int(img_array[:, :, 0][0][0]) - img_array[:, :, 0][0][0]) > 0.0001:
+            img_array = img_array.copy()
+            img_array *= 255
+
         if process_type == "original":
             return img_array.copy()
         # red -> 0, green -> 1, blue -> 2
@@ -258,7 +266,8 @@ class App:
             if len(processed.shape) == 3:
                 processed[:, :, 1] = 0
                 processed[:, :, 2] = 0
-            plt.imsave(arr=processed, fname=os.path.join(base_dir, "assets", 'red.jpg'))
+                # print(np.unique(processed[:, :, 1]).shape)
+            # plt.imsave(arr=processed, fname=os.path.join(base_dir, "assets", 'red.jpg'))
             return processed
         elif process_type == "green":
             processed = img_array.copy()
