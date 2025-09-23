@@ -167,6 +167,8 @@ class App:
 
             histogram_surfaces = []
 
+            bins = 16
+
             if len(img.shape) == 3:  # Цветное изображение
                 colors = ['red', 'green', 'blue']
                 color_names = ['Красный', 'Зеленый', 'Синий']
@@ -174,7 +176,7 @@ class App:
                 # Создаем 3 отдельные гистограммы для каждого канала
                 for i, (color, name) in enumerate(zip(colors, color_names)):
                     fig, ax = plt.subplots(figsize=(2, 3))
-                    ax.hist(img[:, :, i].flatten(), bins=255, alpha=0.8, color=color, density=True)
+                    ax.hist(img[:, :, i].flatten(), bins=bins, alpha=0.8, color=color, density=True)
                     ax.set_title(f'{name} канал', fontsize=9)
                     ax.tick_params(axis='both', which='major', labelsize=7)
                     plt.tight_layout()
@@ -200,7 +202,7 @@ class App:
                 # Создаем совмещенную гистограмму
                 fig, ax = plt.subplots(figsize=(2, 3))
                 for i, color in enumerate(colors):
-                    ax.hist(img[:, :, i].flatten(), bins=255, alpha=0.6, color=color,
+                    ax.hist(img[:, :, i].flatten(), bins=bins, alpha=0.6, color=color,
                             density=True, label=color_names[i])
 
                 ax.set_title('Совмещенные каналы', fontsize=9)
