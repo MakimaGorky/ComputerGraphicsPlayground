@@ -187,7 +187,21 @@ class App:
         return new_img
 
     def grayscale_sub(self, img1, img2):
-        new_img = abs(img1 - img2)
+        # new_img = np.abs(img1 - img2)
+        # for i in range(new_img.shape[0]):
+        #     new_img[:,i] = np.abs(img1[:,i] - img2[:,i])
+        #     print(img1[i])
+        # # new_img = img2
+        # print (new_img)
+
+        height, width, channels = img1.shape
+        new_img = np.zeros_like(img1)  # Создаем пустое изображение для результата
+
+        for i in range(height):
+            for j in range(width):
+                lmao = np.uint8(abs(int(img1[i, j, 0]) - int(img2[i, j, 0])))*10
+                for c in range(channels):
+                    new_img[i, j, c] = lmao
         return new_img
 
     def create_histograms(self):
@@ -203,9 +217,6 @@ class App:
             img = self.images[self.selected_image_index]
 
             # Нормализуем значения, если они в диапазоне [0, 1]
-            if abs(int(img[:, :, 0][0][0]) - img[:, :, 0][0][0]) > 0.0001:
-                img = img.copy()
-                img *= 255
 
             histogram_surfaces = []
 
@@ -316,6 +327,7 @@ class App:
             return []
 
         base_img = self.images[self.selected_image_index].copy()
+        print(np.max(base_img))
         process_types = ["original", "halftone1", "halftone2", "substraction"]
         processed_images = []
 
@@ -383,7 +395,7 @@ class App:
 
             # Отрисовка двух гистограмм
             if self.histogram_surfaces:
-                histogram_titles = ["Полутоновое 1", "Полутоновое 2"]
+                histogram_titles = ["Полутоновое 1", "Полутоновое 2", "asd"]
 
                 y = self.histogram_area.y + 35
                 for i, (hist_surf, title) in enumerate(zip(self.histogram_surfaces, histogram_titles)):
