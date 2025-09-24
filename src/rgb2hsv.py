@@ -2,6 +2,7 @@
 import pygame as pg
 import numpy as np
 import os  # просто будь собой бро
+import sys  # просто будь собой бро
 
 
 class ImagesLoader:
