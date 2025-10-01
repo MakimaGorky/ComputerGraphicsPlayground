@@ -74,7 +74,7 @@ class Filler:
 
     def draw(self):
         self.images_loader.draw()
-        screen.blit(self.image, self.image_offset)
+        self.screen.blit(self.image, self.image_offset)
 
 
 def to_cyan(x, y):
