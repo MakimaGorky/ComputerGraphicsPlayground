@@ -89,11 +89,76 @@ class App:
 
         self.max_draw_point_count = 3
         self.draw_points = []
-        self.draw_point_radius = 12
+        self.draw_point_radius = 8
 
     def draw_point(self, pnt):
         if len(self.draw_points) < self.max_draw_point_count:
-            self.draw_points.append(pnt)
+            self.draw_points.append(
+                (pnt,
+                    (random.randint(0, 255),
+                     random.randint(0, 255),
+                     random.randint(0, 255)
+                     )
+                )
+            )
+
+    def draw_triangle(self):
+        if len(self.draw_points) != 3:
+            return
+
+        # find square
+        min_x = min([e[0][0] for e in self.draw_points])
+        max_x = max([e[0][0] for e in self.draw_points])
+
+        min_y = min([e[0][1] for e in self.draw_points])
+        max_y = max([e[0][1] for e in self.draw_points])
+
+        # оптимизация
+        # непереводимой барицентрической игры слов
+        # которая ещё и неодинакова
+        # a = ((B[1] - C[1]) * (x - C[0]) + (C[0] - B[0]) * (y - C[1])) \
+        #     / ((B[1] - C[1]) * (A[0] - C[0]) + (C[0] - B[0]) * (A[1] - C[1]))
+        # b = ((C[1] - A[1]) * (x - C[0]) + (A[0] - C[0]) * (y - C[1])) \
+        #     / ((B[1] - C[1]) * (A[0] - C[0]) + (C[0] - B[0]) * (A[1] - C[1]))
+        # c = 1 - a - b
+        def edge_function(a, b, c):
+            return (c[0] - a[0]) * (b[1] - a[1]) - (c[1] - a[1]) * (b[0] - a[0])
+
+        A, A_col = self.draw_points[0]
+        B, B_col = self.draw_points[1]
+        C, C_col = self.draw_points[2]
+
+        area2 = edge_function(A, B, C)
+
+        if abs(area2) < 0.001:
+            return
+
+        for x in range(min_x, max_x + 1):
+            for y in range(min_y, max_y + 1):
+                pxl_mid = (x + 0.5, y + 0.5)
+                # a = edge_function(B, C, pxl_mid)
+                # b = edge_function(C, A, pxl_mid)
+                # c = edge_function(A, B, pxl_mid)
+                # print(*[a, b, c])
+                a = ((B[1] - C[1]) * (x - C[0]) + (C[0] - B[0]) * (y - C[1])) \
+                    / ((B[1] - C[1]) * (A[0] - C[0]) + (C[0] - B[0]) * (A[1] - C[1]))
+                b = ((C[1] - A[1]) * (x - C[0]) + (A[0] - C[0]) * (y - C[1])) \
+                    / ((B[1] - C[1]) * (A[0] - C[0]) + (C[0] - B[0]) * (A[1] - C[1]))
+                c = 1 - a - b
+
+                if a >= 0 and b >= 0 and c >= 0:
+                    λa = edge_function(B, C, pxl_mid) / area2
+                    λb = edge_function(C, A, pxl_mid) / area2
+                    λc = edge_function(A, B, pxl_mid) / area2
+
+                    # print(*[λa, λb, λc])
+                    pxl_r = max(0, min(λa * A_col[0] + λb * B_col[0] + λc * C_col[0], 255))
+                    pxl_g = max(0, min(λa * A_col[1] + λb * B_col[1] + λc * C_col[1], 255))
+                    pxl_b = max(0, min(λa * A_col[2] + λb * B_col[2] + λc * C_col[2], 255))
+
+                    # print("draw", pxl_r, pxl_g, pxl_b)
+                    pygame.draw.circle(self.screen, (pxl_r, pxl_g, pxl_b), (x, y), 1)
+
 
     def draw_interface(self):
         """
@@ -119,7 +184,9 @@ class App:
             pygame.draw.rect(self.screen, self.colors['draw_area'], self.draw_area)
             if self.draw_points:
                 for pnt in self.draw_points:
-                    pygame.draw.circle(self.screen, self.colors['draw_point_default'], (pnt[0], pnt[1]), self.draw_point_radius)
+                    pygame.draw.circle(self.screen, pnt[1], (pnt[0][0], pnt[0][1]), self.draw_point_radius)
+            if len(self.draw_points) == 3:
+                self.draw_triangle()
 
     def collide(self, point, collision_box):
         x_col = (collision_box.x <= point[0]) and (collision_box.x + collision_box.width >= point[0])
