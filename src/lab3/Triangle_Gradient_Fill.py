@@ -167,16 +167,10 @@ class App:
         # Очищаем экран
         self.screen.fill(self.colors['background'])
 
-        # Рисуем кнопки:
-        pygame.draw.rect(self.screen, self.colors['button'], self.button_prev, border_radius=8)
-        text = "<"
-        text_surf = self.font_large.render(text, True, self.colors['text'])
-        self.screen.blit(text_surf, (self.button_prev.x + 8, self.button_prev.y + 2))
-
         pygame.draw.rect(self.screen, self.colors['button'], self.button_next, border_radius=8)
-        text = ">"
+        text = "Х"
         text_surf = self.font_large.render(text, True, self.colors['text'])
-        self.screen.blit(text_surf, (self.button_next.x + 10, self.button_next.y + 2))
+        self.screen.blit(text_surf, (self.button_next.x + 8, self.button_next.y + 4))
 
         # Рисуем рамки областей
         if self.draw_area:
@@ -204,8 +198,8 @@ class App:
             elif event.type == MOUSEBUTTONDOWN:
                 if self.collide(event.pos, self.draw_area):
                     self.draw_point(event.pos)
-                elif self.collide(event.pos, self.button_next):
-                    continue
+                elif self.collide(event.pos, self.button_prev):
+                    self.draw_points = []
 
             elif event.type == KEYDOWN:
                 if event.key == K_ESCAPE:
