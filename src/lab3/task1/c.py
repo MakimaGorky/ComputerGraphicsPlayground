@@ -52,27 +52,22 @@ class BoundaryTracer:
         """
         contour = []
 
-        # Текущая позиция
         current_x, current_y = start_x, start_y
 
-        # Ищем первую граничную точку
         # Проверяем, что текущая точка внутри области
         if self.is_boundary(current_x, current_y, target_color):
             return contour
 
-        # Ищем граничную точку рядом с начальной
         boundary_start = None
         for dx, dy in self.directions:
             nx, ny = current_x + dx, current_y + dy
             if self.is_boundary(nx, ny, target_color):
-                # Нашли границу, текущая точка у границы
                 boundary_start = (current_x, current_y)
                 break
 
         if not boundary_start:
             return contour
 
-        # Начинаем обход от граничной точки
         current_x, current_y = boundary_start
         start_point = boundary_start
 
@@ -80,19 +75,17 @@ class BoundaryTracer:
         max_iterations = self.width * self.height
         iterations = 0
 
-        # Алгоритм обхода по периметру
-        prev_dir = 0  # Предыдущее направление
+        # Обход по периметру
+        prev_dir = 0
 
         while iterations < max_iterations:
             iterations += 1
 
-            # Добавляем текущую точку
             if (current_x, current_y) not in visited_set:
                 contour.append((current_x, current_y))
                 visited.add((current_x, current_y))
                 visited_set.add((current_x, current_y))
 
-            # Ищем следующую точку на границе
             found = False
             # Начинаем поиск с направления, перпендикулярного предыдущему движению
             start_dir = (prev_dir + 6) % 8  # Поворот налево
@@ -122,7 +115,6 @@ class BoundaryTracer:
                         break
 
             if not found:
-                # Не нашли продолжение, пробуем альтернативный метод
                 break
 
         return contour
@@ -170,10 +162,8 @@ class BoundaryTracer:
         remaining = set(sorted_candidates)
 
         while remaining:
-            # Берем любую непосещенную граничную точку
             start_point = min(remaining, key=lambda p: (p[1], p[0]))
 
-            # Обходим контур от этой точки
             contour = self.trace_boundary_component(start_point, boundary_candidates)
 
             if contour:

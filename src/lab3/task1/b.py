@@ -17,7 +17,13 @@ def load_single_image_like_get_image(path, thumb_width=400, thumb_height=400):
 
 IMAGE_FROM = load_single_image_like_get_image("../../../assets/meme.png", thumb_width=400, thumb_height=400)
 def from_image(x, y):
-    return IMAGE_FROM.get_at((x, y))
+    width, height = IMAGE_FROM.get_size()
+    cx, cy = CENTER
+    nx = -cx + width // 2 + x
+    ny = -cy + height // 2 + y
+    if 0 <= nx < width and 0 <= ny < height:
+        return IMAGE_FROM.get_at((nx, ny))
+    return (0, 0, 0)
 
 
 if __name__ == '__main__':
@@ -42,6 +48,7 @@ if __name__ == '__main__':
                 # surf = pg.surfarray.make_surface(np.transpose(image, (1,0,2)).swapaxes(0,1))
 
         if filler.have_clicked:
+            CENTER = filler.have_clicked_at[0], filler.have_clicked_at[1]
             filler.run(from_image)
 
         screen.fill((30, 30, 30))
