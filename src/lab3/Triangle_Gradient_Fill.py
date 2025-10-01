@@ -30,8 +30,9 @@ class App:
             'border': (80, 85, 95),
             'highlight': (97, 175, 239),
             'button': (150, 150, 250),
-            'draw_area' : (255, 255, 255),
-            'draw_point_default' : (0, 0, 0),
+            'draw_area': (255, 255, 255),
+            'draw_point_default': (0, 0, 0),
+            'point_outline': (70, 70, 70)  # Тёмно-серый цвет для обводки
         }
 
         # Шрифты
@@ -69,6 +70,11 @@ class App:
         self.init_draw_area()
         self.init_draw_points()
 
+        # Для перетаскивания точек
+        self.dragging_point_index = -1
+        self.offset_x = 0
+        self.offset_y = 0
+
     def init_draw_area(self):
         self.draw_area_border = pygame.Rect(
             self.margin,
@@ -94,12 +100,12 @@ class App:
     def draw_point(self, pnt):
         if len(self.draw_points) < self.max_draw_point_count:
             self.draw_points.append(
-                (pnt,
-                    (random.randint(0, 255),
-                     random.randint(0, 255),
-                     random.randint(0, 255)
-                     )
-                )
+                (list(pnt),  # Храним точку как изменяемый список [x, y]
+                 (random.randint(0, 255),
+                  random.randint(0, 255),
+                  random.randint(0, 255)
+                  )
+                 )
             )
 
     def draw_triangle(self):
@@ -113,14 +119,6 @@ class App:
         min_y = min([e[0][1] for e in self.draw_points])
         max_y = max([e[0][1] for e in self.draw_points])
 
-        # оптимизация
-        # непереводимой барицентрической игры слов
-        # которая ещё и неодинакова
-        # a = ((B[1] - C[1]) * (x - C[0]) + (C[0] - B[0]) * (y - C[1])) \
-        #     / ((B[1] - C[1]) * (A[0] - C[0]) + (C[0] - B[0]) * (A[1] - C[1]))
-        # b = ((C[1] - A[1]) * (x - C[0]) + (A[0] - C[0]) * (y - C[1])) \
-        #     / ((B[1] - C[1]) * (A[0] - C[0]) + (C[0] - B[0]) * (A[1] - C[1]))
-        # c = 1 - a - b
         def edge_function(a, b, c):
             return (c[0] - a[0]) * (b[1] - a[1]) - (c[1] - a[1]) * (b[0] - a[0])
 
@@ -136,29 +134,19 @@ class App:
         for x in range(min_x, max_x + 1):
             for y in range(min_y, max_y + 1):
                 pxl_mid = (x + 0.5, y + 0.5)
-                # a = edge_function(B, C, pxl_mid)
-                # b = edge_function(C, A, pxl_mid)
-                # c = edge_function(A, B, pxl_mid)
-                # print(*[a, b, c])
-                a = ((B[1] - C[1]) * (x - C[0]) + (C[0] - B[0]) * (y - C[1])) \
-                    / ((B[1] - C[1]) * (A[0] - C[0]) + (C[0] - B[0]) * (A[1] - C[1]))
-                b = ((C[1] - A[1]) * (x - C[0]) + (A[0] - C[0]) * (y - C[1])) \
-                    / ((B[1] - C[1]) * (A[0] - C[0]) + (C[0] - B[0]) * (A[1] - C[1]))
-                c = 1 - a - b
 
-                if a >= 0 and b >= 0 and c >= 0:
-                    λa = edge_function(B, C, pxl_mid) / area2
-                    λb = edge_function(C, A, pxl_mid) / area2
-                    λc = edge_function(A, B, pxl_mid) / area2
+                # Использование барицентрических координат
+                # Относительно A, B, C
+                lambda_a = edge_function(B, C, pxl_mid) / area2
+                lambda_b = edge_function(C, A, pxl_mid) / area2
+                lambda_c = edge_function(A, B, pxl_mid) / area2
 
-                    # print(*[λa, λb, λc])
-                    pxl_r = max(0, min(λa * A_col[0] + λb * B_col[0] + λc * C_col[0], 255))
-                    pxl_g = max(0, min(λa * A_col[1] + λb * B_col[1] + λc * C_col[1], 255))
-                    pxl_b = max(0, min(λa * A_col[2] + λb * B_col[2] + λc * C_col[2], 255))
+                if lambda_a >= 0 and lambda_b >= 0 and lambda_c >= 0:
+                    pxl_r = int(max(0, min(lambda_a * A_col[0] + lambda_b * B_col[0] + lambda_c * C_col[0], 255)))
+                    pxl_g = int(max(0, min(lambda_a * A_col[1] + lambda_b * B_col[1] + lambda_c * C_col[1], 255)))
+                    pxl_b = int(max(0, min(lambda_a * A_col[2] + lambda_b * B_col[2] + lambda_c * C_col[2], 255)))
 
-                    # print("draw", pxl_r, pxl_g, pxl_b)
                     pygame.draw.circle(self.screen, (pxl_r, pxl_g, pxl_b), (x, y), 1)
-
 
     def draw_interface(self):
         """
@@ -181,11 +169,17 @@ class App:
         if self.draw_area:
             pygame.draw.rect(self.screen, self.colors['border'], self.draw_area_border, 2)
             pygame.draw.rect(self.screen, self.colors['draw_area'], self.draw_area)
-            if self.draw_points:
-                for pnt in self.draw_points:
-                    pygame.draw.circle(self.screen, pnt[1], (pnt[0][0], pnt[0][1]), self.draw_point_radius)
+
             if len(self.draw_points) == 3:
                 self.draw_triangle()
+
+            if self.draw_points:
+                for pnt_index, (pnt_coords, pnt_color) in enumerate(self.draw_points):
+                    # Рисуем обводку
+                    pygame.draw.circle(self.screen, self.colors['point_outline'], (pnt_coords[0], pnt_coords[1]),
+                                       self.draw_point_radius + 2)
+                    # Рисуем саму точку
+                    pygame.draw.circle(self.screen, pnt_color, (pnt_coords[0], pnt_coords[1]), self.draw_point_radius)
 
     def collide(self, point, collision_box):
         x_col = (collision_box.x <= point[0]) and (collision_box.x + collision_box.width >= point[0])
@@ -201,12 +195,38 @@ class App:
                 self.running = False
 
             elif event.type == MOUSEBUTTONDOWN:
-                if self.collide(event.pos, self.draw_area):
-                    self.draw_point(event.pos)
-                elif self.collide(event.pos, self.button_prev):
-                    self.draw_points = []
-                elif self.collide(event.pos, self.button_next):
-                    self.draw_points = self.draw_points[:-1]
+                if event.button == 1:  # Левая кнопка мыши
+                    if self.collide(event.pos, self.draw_area):
+                        # Проверяем, попали ли мы в существующую точку
+                        for i, (pnt_coords, _) in enumerate(self.draw_points):
+                            dist = ((event.pos[0] - pnt_coords[0]) ** 2 + (event.pos[1] - pnt_coords[1]) ** 2) ** 0.5
+                            if dist < self.draw_point_radius + 2:  # Учитываем обводку для захвата
+                                self.dragging_point_index = i
+                                self.offset_x = pnt_coords[0] - event.pos[0]
+                                self.offset_y = pnt_coords[1] - event.pos[1]
+                                break
+                        else:  # Если не попали в существующую точку, создаём новую
+                            self.draw_point(event.pos)
+                    elif self.collide(event.pos, self.button_prev):
+                        self.draw_points = []
+                    elif self.collide(event.pos, self.button_next):
+                        self.draw_points = self.draw_points[:-1]
+
+            elif event.type == MOUSEBUTTONUP:
+                if event.button == 1:
+                    self.dragging_point_index = -1  # Отпускаем точку
+
+            elif event.type == MOUSEMOTION:
+                if self.dragging_point_index != -1:
+                    new_x = event.pos[0] + self.offset_x
+                    new_y = event.pos[1] + self.offset_y
+
+                    # Ограничиваем перемещение точкой в пределах draw_area
+                    new_x = max(self.draw_area.left, min(new_x, self.draw_area.right))
+                    new_y = max(self.draw_area.top, min(new_y, self.draw_area.bottom))
+
+                    self.draw_points[self.dragging_point_index][0][0] = new_x
+                    self.draw_points[self.dragging_point_index][0][1] = new_y
 
             elif event.type == KEYDOWN:
                 if event.key == K_ESCAPE:
@@ -215,7 +235,6 @@ class App:
                     self.draw_points = self.draw_points[:-1]
                 elif event.key == K_RIGHT:
                     continue
-
 
     def main_loop(self):
         """
