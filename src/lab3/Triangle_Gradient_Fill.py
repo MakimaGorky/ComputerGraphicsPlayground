@@ -167,8 +167,13 @@ class App:
         # Очищаем экран
         self.screen.fill(self.colors['background'])
 
-        pygame.draw.rect(self.screen, self.colors['button'], self.button_next, border_radius=8)
+        pygame.draw.rect(self.screen, self.colors['button'], self.button_prev, border_radius=8)
         text = "Х"
+        text_surf = self.font_large.render(text, True, self.colors['text'])
+        self.screen.blit(text_surf, (self.button_prev.x + 8, self.button_prev.y + 4))
+
+        pygame.draw.rect(self.screen, self.colors['button'], self.button_next, border_radius=8)
+        text = "<"
         text_surf = self.font_large.render(text, True, self.colors['text'])
         self.screen.blit(text_surf, (self.button_next.x + 8, self.button_next.y + 4))
 
@@ -200,12 +205,14 @@ class App:
                     self.draw_point(event.pos)
                 elif self.collide(event.pos, self.button_prev):
                     self.draw_points = []
+                elif self.collide(event.pos, self.button_next):
+                    self.draw_points = self.draw_points[:-1]
 
             elif event.type == KEYDOWN:
                 if event.key == K_ESCAPE:
                     self.running = False
                 elif event.key == K_LEFT:
-                    continue
+                    self.draw_points = self.draw_points[:-1]
                 elif event.key == K_RIGHT:
                     continue
 
