@@ -27,14 +27,14 @@ class BoundaryTracer:
 
         # Направления обхода (8-связность): начиная с верха и по часовой
         self.directions = [
-            (0, -1),   # N
-            (1, -1),   # NE
-            (1, 0),    # E
-            (1, 1),    # SE
-            (0, 1),    # S
-            (-1, 1),   # SW
-            (-1, 0),   # W
-            (-1, -1)   # NW
+            (0, -1),
+            (1, -1),
+            (1, 0),
+            (1, 1),
+            (0, 1),
+            (-1, 1),
+            (-1, 0),
+            (-1, -1)
         ]
 
     def is_boundary(self, x, y, target_color):
@@ -144,7 +144,7 @@ class BoundaryTracer:
         print(f"Найдено точек в области: {len(area_points)}")
 
         if not area_points:
-            return all_boundaries
+            return []
 
         # Шаг 2: Находим границы области
         # Для каждой точки области проверяем, является ли она граничной
@@ -243,7 +243,6 @@ class BoundaryTracer:
             visited.add((x, y))
             area.append((x, y))
 
-            # Добавляем соседей (4-связность для надежности)
             for dx, dy in [(0, -1), (1, 0), (0, 1), (-1, 0)]:
                 nx, ny = x + dx, y + dy
                 if (nx, ny) not in visited:
@@ -257,28 +256,28 @@ class BoundaryTracer:
         """
         if self.boundary_points and self.show_boundary:
             colors = [
-                (255, 0, 0),    # Красный для первого контура
-                (0, 255, 0),    # Зеленый для отверстий
-                (0, 0, 255),    # Синий
-                (255, 255, 0),  # Желтый
-                (255, 0, 255),  # Пурпурный
+                (255, 0, 0),  
+                (0, 255, 0),  
+                (0, 0, 255),  
+                (255, 255, 0),
+                (255, 0, 255),
             ]
 
             for contour_idx, contour in enumerate(self.boundary_points):
                 color = colors[contour_idx % len(colors)]
 
-                for i, (x, y) in enumerate(contour):
+                if len(contour) > 1:
+                    points = [(x + self.image_offset[0], y + self.image_offset[1]) 
+                              for (x, y) in contour]
+
+                    pg.draw.lines(self.screen, color, True, points, 2)
+
+                else:
+                    x, y = contour[0]
                     px = x + self.image_offset[0]
                     py = y + self.image_offset[1]
                     pg.draw.circle(self.screen, color, (px, py), 2)
 
-                    # Рисуем линии между соседними точками
-                    if i > 0:
-                        prev_x, prev_y = contour[i-1]
-                        prev_px = prev_x + self.image_offset[0]
-                        prev_py = prev_y + self.image_offset[1]
-                        pg.draw.line(self.screen, color,
-                                   (prev_px, prev_py), (px, py), 1)
 
     def run(self):
         """

@@ -9,7 +9,7 @@ def load_single_image_like_get_image(path, thumb_width=400, thumb_height=400):
         raise FileNotFoundError(f"Файл не найден: {path}")
 
     # Загружаем изображение через pygame
-    img_surf = pg.image.load(path)  # convert() для ускорения
+    img_surf = pg.image.load(path)
     scaled_img_surf = pg.transform.scale(img_surf, (thumb_width, thumb_height))
     
     return scaled_img_surf
