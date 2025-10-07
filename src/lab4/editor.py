@@ -315,10 +315,10 @@ class PolygonEditor:
     def handle_intersection_click(self, x: float, y: float):
         """Обработка клика в режиме поиска пересечений"""
         if self.intersection_edge is None:
-            # Выбираем первое ребро
-            poly = self.select_polygon_at(x, y)
-            if poly and len(poly.vertices) >= 2:
-                self.intersection_edge = poly
+            # Выбираем ближайшее ребро
+            edge = self.select_nearest_edge_at(x, y)
+            if edge:
+                self.intersection_edge = edge
                 self.temp_edge_start = None
                 self.add_message("Первое ребро выбрано. Создайте второе ребро")
         elif self.temp_edge_start is None:
@@ -327,18 +327,17 @@ class PolygonEditor:
             self.add_message("Начало второго ребра. Кликните конец")
         else:
             # Конец второго ребра - ищем пересечение
-            if len(self.intersection_edge.vertices) >= 2:
-                intersection = line_intersection(
-                    self.intersection_edge.vertices[0],
-                    self.intersection_edge.vertices[1],
-                    self.temp_edge_start,
-                    (x, y)
-                )
-                if intersection:
-                    self.intersection_point = intersection
-                    self.add_message(f"Пересечение: ({intersection[0]:.1f}, {intersection[1]:.1f})")
-                else:
-                    self.add_message("Ребра не пересекаются")
+            intersection = line_intersection(
+                self.intersection_edge[0],
+                self.intersection_edge[1],
+                self.temp_edge_start,
+                (x, y)
+            )
+            if intersection:
+                self.intersection_point = intersection
+                self.add_message(f"Пересечение: ({intersection[0]:.1f}, {intersection[1]:.1f})")
+            else:
+                self.add_message("Ребра не пересекаются")
 
             # Создаем временное ребро для визуализации
             temp_edge = Polygon()
@@ -379,16 +378,16 @@ class PolygonEditor:
         """Обработка клика в режиме классификации точки"""
         if self.intersection_edge is None:
             # Выбираем ребро
-            poly = self.select_polygon_at(x, y)
-            if poly and len(poly.vertices) >= 2:
-                self.intersection_edge = poly
+            edge = self.select_nearest_edge_at(x, y)
+            if edge:
+                self.intersection_edge = edge
                 self.add_message("Ребро выбрано. Кликните точку для классификации")
         else:
             # Классифицируем точку
             position = point_position_relative_to_edge(
                 (x, y),
-                self.intersection_edge.vertices[0],
-                self.intersection_edge.vertices[1]
+                self.intersection_edge[0],
+                self.intersection_edge[1]
             )
             self.add_message(f"Точка ({x:.0f}, {y:.0f}) находится {position} от ребра")
 
@@ -482,6 +481,16 @@ class PolygonEditor:
                 self.selected_polygon = None
         except Exception as e:
             self.add_message(f"Ошибка ввода: {e}")
+
+    def select_nearest_edge_at(self, x, y):
+        for poly in self.polygons:
+            if len(poly.vertices) >= 2:
+                for i in range(0, len(poly.vertices)):
+                    dist = point_to_segment_distance((x, y), poly.vertices[i], poly.vertices[(i + 1)%len(poly.vertices)])
+                    if dist < config.SELECTION_THRESHOLD:
+                        return (poly.vertices[i], poly.vertices[(i + 1)%len(poly.vertices)])
+        return None
+
 
     def draw(self):
         """Отрисовка всей сцены"""

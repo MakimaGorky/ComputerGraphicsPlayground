@@ -48,9 +48,9 @@ def point_position_relative_to_edge(point: Tuple[float, float],
     if abs(cross) < 1e-6:
         return "на прямой"
     elif cross > 0:
-        return "слева"
-    else:
         return "справа"
+    else:
+        return "слева"
 
 
 def point_in_polygon(point: Tuple[float, float], vertices: list) -> bool:
