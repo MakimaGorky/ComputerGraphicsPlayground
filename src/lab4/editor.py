@@ -27,6 +27,10 @@ class PolygonEditor:
         # Режимы работы
         self.mode = "create"
 
+        # Подрежимы для операций, требующих несколько кликов
+        self.waiting_for_point = False  # Ожидание клика для выбора точки
+        self.operation_type = ""  # Тип операции (rotate_point, scale_point)
+
         # Временные данные для операций
         self.temp_point: Optional[Tuple[float, float]] = None
         self.temp_edge_start: Optional[Tuple[float, float]] = None
@@ -66,6 +70,7 @@ class PolygonEditor:
         if self.current_polygon and len(self.current_polygon.vertices) > 0:
             self.polygons.append(self.current_polygon)
             self.current_polygon = None
+            self.add_message("Полигон завершен")
 
     def select_polygon_at(self, x: float, y: float) -> Optional[Polygon]:
         """Выбрать полигон в точке (x, y)"""
@@ -106,9 +111,11 @@ class PolygonEditor:
             if event.key == pygame.K_RETURN:
                 self.input_active = False
                 if self.input_callback:
-                    self.input_callback(self.input_text, **self.input_params)
+                    self.input_callback(self.input_text)
             elif event.key == pygame.K_ESCAPE:
                 self.input_active = False
+                self.waiting_for_point = False
+                self.add_message("Операция отменена")
             elif event.key == pygame.K_BACKSPACE:
                 self.input_text = self.input_text[:-1]
             else:
@@ -140,6 +147,14 @@ class PolygonEditor:
             self.switch_to_point_in_poly_mode()
         elif event.key == pygame.K_9:
             self.switch_to_classify_mode()
+        elif event.key == pygame.K_ESCAPE:
+            # Отмена текущей операции
+            self.waiting_for_point = False
+            self.selected_polygon = None
+            self.temp_point = None
+            self.temp_edge_start = None
+            self.intersection_edge = None
+            self.add_message("Операция отменена")
 
     def clear_scene(self):
         """Очистить сцену"""
@@ -147,46 +162,71 @@ class PolygonEditor:
         self.current_polygon = None
         self.selected_polygon = None
         self.intersection_point = None
+        self.temp_point = None
+        self.temp_edge_start = None
+        self.intersection_edge = None
+        self.waiting_for_point = False
         self.add_message("Сцена очищена")
 
     def switch_to_create_mode(self):
         self.mode = "create"
         self.finish_polygon()
+        self.waiting_for_point = False
         self.add_message("Режим: создание полигонов")
 
     def switch_to_translate_mode(self):
         self.mode = "translate"
+        self.finish_polygon()
+        self.waiting_for_point = False
         self.add_message("Режим: смещение (выберите полигон)")
 
     def switch_to_rotate_point_mode(self):
         self.mode = "rotate_point"
+        self.finish_polygon()
+        self.waiting_for_point = False
+        self.selected_polygon = None
+        self.temp_point = None
         self.add_message("Режим: поворот вокруг точки")
 
     def switch_to_rotate_center_mode(self):
         self.mode = "rotate_center"
+        self.finish_polygon()
+        self.waiting_for_point = False
         self.add_message("Режим: поворот вокруг центра")
 
     def switch_to_scale_point_mode(self):
         self.mode = "scale_point"
+        self.finish_polygon()
+        self.waiting_for_point = False
+        self.selected_polygon = None
+        self.temp_point = None
         self.add_message("Режим: масштабирование от точки")
 
     def switch_to_scale_center_mode(self):
         self.mode = "scale_center"
+        self.finish_polygon()
+        self.waiting_for_point = False
         self.add_message("Режим: масштабирование от центра")
 
     def switch_to_intersection_mode(self):
         self.mode = "intersection"
+        self.finish_polygon()
         self.intersection_edge = None
         self.temp_edge_start = None
+        self.waiting_for_point = False
         self.add_message("Режим: пересечение ребер (выберите первое ребро)")
 
     def switch_to_point_in_poly_mode(self):
         self.mode = "point_in_poly"
+        self.finish_polygon()
+        self.waiting_for_point = False
         self.add_message("Режим: точка в полигоне")
 
     def switch_to_classify_mode(self):
         self.mode = "classify"
+        self.finish_polygon()
         self.intersection_edge = None
+        self.waiting_for_point = False
         self.add_message("Режим: классификация точки (выберите ребро)")
 
     def handle_mouse_click(self, pos: Tuple[int, int]):
@@ -217,6 +257,7 @@ class PolygonEditor:
         if self.current_polygon is None:
             self.current_polygon = Polygon()
         self.current_polygon.add_vertex(x, y)
+        self.add_message(f"Добавлена вершина ({x:.0f}, {y:.0f})")
 
     def handle_translate_click(self, x: float, y: float):
         """Обработка клика в режиме смещения"""
@@ -227,11 +268,19 @@ class PolygonEditor:
 
     def handle_rotate_point_click(self, x: float, y: float):
         """Обработка клика в режиме поворота вокруг точки"""
-        poly = self.select_polygon_at(x, y)
-        if poly:
-            self.selected_polygon = poly
-            self.temp_point = None
-            self.start_input("Кликните точку вращения", self.wait_for_rotation_point)
+        if not self.selected_polygon:
+            # Выбираем полигон
+            poly = self.select_polygon_at(x, y)
+            if poly:
+                self.selected_polygon = poly
+                self.waiting_for_point = True
+                self.add_message("Полигон выбран. Кликните точку вращения")
+        elif self.waiting_for_point:
+            # Выбираем точку вращения
+            self.temp_point = (x, y)
+            self.waiting_for_point = False
+            self.add_message(f"Точка вращения: ({x:.0f}, {y:.0f})")
+            self.start_input("Введите угол (градусы):", self.apply_rotation_point)
 
     def handle_rotate_center_click(self, x: float, y: float):
         """Обработка клика в режиме поворота вокруг центра"""
@@ -242,11 +291,19 @@ class PolygonEditor:
 
     def handle_scale_point_click(self, x: float, y: float):
         """Обработка клика в режиме масштабирования от точки"""
-        poly = self.select_polygon_at(x, y)
-        if poly:
-            self.selected_polygon = poly
-            self.temp_point = None
-            self.start_input("Кликните центр масштабирования", self.wait_for_scale_point)
+        if not self.selected_polygon:
+            # Выбираем полигон
+            poly = self.select_polygon_at(x, y)
+            if poly:
+                self.selected_polygon = poly
+                self.waiting_for_point = True
+                self.add_message("Полигон выбран. Кликните центр масштабирования")
+        elif self.waiting_for_point:
+            # Выбираем центр масштабирования
+            self.temp_point = (x, y)
+            self.waiting_for_point = False
+            self.add_message(f"Центр масштабирования: ({x:.0f}, {y:.0f})")
+            self.start_input("Введите sx,sy:", self.apply_scale_point)
 
     def handle_scale_center_click(self, x: float, y: float):
         """Обработка клика в режиме масштабирования от центра"""
@@ -258,15 +315,18 @@ class PolygonEditor:
     def handle_intersection_click(self, x: float, y: float):
         """Обработка клика в режиме поиска пересечений"""
         if self.intersection_edge is None:
+            # Выбираем первое ребро
             poly = self.select_polygon_at(x, y)
             if poly and len(poly.vertices) >= 2:
                 self.intersection_edge = poly
                 self.temp_edge_start = None
-                self.add_message("Первое ребро выбрано. Кликните для второго.")
+                self.add_message("Первое ребро выбрано. Создайте второе ребро")
         elif self.temp_edge_start is None:
+            # Начало второго ребра
             self.temp_edge_start = (x, y)
-            self.add_message("Начало второго ребра. Кликните конец.")
+            self.add_message("Начало второго ребра. Кликните конец")
         else:
+            # Конец второго ребра - ищем пересечение
             if len(self.intersection_edge.vertices) >= 2:
                 intersection = line_intersection(
                     self.intersection_edge.vertices[0],
@@ -279,65 +339,72 @@ class PolygonEditor:
                     self.add_message(f"Пересечение: ({intersection[0]:.1f}, {intersection[1]:.1f})")
                 else:
                     self.add_message("Ребра не пересекаются")
+
+            # Создаем временное ребро для визуализации
+            temp_edge = Polygon()
+            temp_edge.add_vertex(self.temp_edge_start[0], self.temp_edge_start[1])
+            temp_edge.add_vertex(x, y)
+            temp_edge.color = config.CYAN
+            self.polygons.append(temp_edge)
+
+            # Сбрасываем для следующей проверки
             self.temp_edge_start = None
+            self.intersection_edge = None
 
     def handle_point_in_poly_click(self, x: float, y: float):
         """Обработка клика в режиме проверки точки в полигоне"""
-        poly = self.select_polygon_at(x, y)
-        if poly and len(poly.vertices) >= 3:
-            inside = point_in_polygon((x, y), poly.vertices)
-            self.add_message(f"Точка {'внутри' if inside else 'снаружи'} полигона")
+        # Сначала проверяем все полигоны
+        found = False
+        for poly in self.polygons:
+            if len(poly.vertices) >= 3:
+                inside = point_in_polygon((x, y), poly.vertices)
+                if inside:
+                    self.add_message(f"Точка ({x:.0f}, {y:.0f}) внутри полигона")
+                    found = True
+                    # Визуализируем точку
+                    point = Polygon()
+                    point.add_vertex(x, y)
+                    point.color = config.GREEN
+                    self.polygons.append(point)
+                    break
 
+        if not found:
+            self.add_message(f"Точка ({x:.0f}, {y:.0f}) снаружи всех полигонов")
+            # Визуализируем точку
+            point = Polygon()
+            point.add_vertex(x, y)
+            point.color = config.RED
+            self.polygons.append(point)
     def handle_classify_click(self, x: float, y: float):
         """Обработка клика в режиме классификации точки"""
         if self.intersection_edge is None:
+            # Выбираем ребро
             poly = self.select_polygon_at(x, y)
             if poly and len(poly.vertices) >= 2:
                 self.intersection_edge = poly
-                self.add_message("Ребро выбрано. Кликните точку для классификации.")
+                self.add_message("Ребро выбрано. Кликните точку для классификации")
         else:
+            # Классифицируем точку
             position = point_position_relative_to_edge(
                 (x, y),
                 self.intersection_edge.vertices[0],
                 self.intersection_edge.vertices[1]
             )
-            self.add_message(f"Точка находится {position} от ребра")
+            self.add_message(f"Точка ({x:.0f}, {y:.0f}) находится {position} от ребра")
 
-    def wait_for_rotation_point(self, text, **params):
-        """Ожидание клика для выбора точки вращения"""
-        waiting = True
-        while waiting and self.running:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    self.running = False
-                    waiting = False
-                elif event.type == pygame.MOUSEBUTTONDOWN:
-                    if event.button == 1:
-                        self.temp_point = event.pos
-                        waiting = False
-                        self.start_input("Введите угол (градусы):", self.apply_rotation_point)
+            # Визуализируем точку
+            point = Polygon()
+            point.add_vertex(x, y)
+            if position == "слева":
+                point.color = config.GREEN
+            elif position == "справа":
+                point.color = config.RED
+            else:
+                point.color = config.YELLOW
+            self.polygons.append(point)
 
-            self.draw()
-            pygame.display.flip()
-            self.clock.tick(60)
-
-    def wait_for_scale_point(self, text, **params):
-        """Ожидание клика для выбора центра масштабирования"""
-        waiting = True
-        while waiting and self.running:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    self.running = False
-                    waiting = False
-                elif event.type == pygame.MOUSEBUTTONDOWN:
-                    if event.button == 1:
-                        self.temp_point = event.pos
-                        waiting = False
-                        self.start_input("Введите sx,sy:", self.apply_scale_point)
-
-            self.draw()
-            pygame.display.flip()
-            self.clock.tick(60)
+            # Готовы к следующей классификации
+            self.intersection_edge = None
 
     # Функции применения преобразований
 
@@ -345,69 +412,76 @@ class PolygonEditor:
         """Применить смещение"""
         try:
             parts = text.split(',')
-            dx = float(parts[0])
-            dy = float(parts[1])
+            dx = float(parts[0].strip())
+            dy = float(parts[1].strip())
 
             if self.selected_polygon:
                 matrix = translation_matrix(dx, dy)
                 self.selected_polygon.apply_transformation(matrix)
                 self.add_message(f"Смещение на ({dx}, {dy}) применено")
-        except:
-            self.add_message("Ошибка ввода")
+                self.selected_polygon = None
+        except Exception as e:
+            self.add_message(f"Ошибка ввода: {e}")
 
     def apply_rotation_point(self, text, **params):
         """Применить поворот вокруг точки"""
         try:
-            angle = math.radians(float(text))
+            angle = math.radians(float(text.strip()))
 
             if self.selected_polygon and self.temp_point:
                 matrix = rotation_matrix(angle, self.temp_point[0], self.temp_point[1])
                 self.selected_polygon.apply_transformation(matrix)
                 self.add_message(f"Поворот на {text}° применен")
-        except:
-            self.add_message("Ошибка ввода")
+                self.selected_polygon = None
+                self.temp_point = None
+        except Exception as e:
+            self.add_message(f"Ошибка ввода: {e}")
 
     def apply_rotation_center(self, text, **params):
         """Применить поворот вокруг центра"""
         try:
-            angle = math.radians(float(text))
+            angle = math.radians(float(text.strip()))
 
             if self.selected_polygon:
                 cx, cy = self.selected_polygon.get_center()
                 matrix = rotation_matrix(angle, cx, cy)
                 self.selected_polygon.apply_transformation(matrix)
-                self.add_message(f"Поворот на {text}° вокруг центра")
-        except:
-            self.add_message("Ошибка ввода")
+                self.add_message(f"Поворот на {text}° вокруг центра применен")
+                self.selected_polygon = None
+        except Exception as e:
+            self.add_message(f"Ошибка ввода: {e}")
 
     def apply_scale_point(self, text, **params):
         """Применить масштабирование от точки"""
         try:
             parts = text.split(',')
-            sx = float(parts[0])
-            sy = float(parts[1])
+            sx = float(parts[0].strip())
+            sy = float(parts[1].strip())
 
             if self.selected_polygon and self.temp_point:
                 matrix = scaling_matrix(sx, sy, self.temp_point[0], self.temp_point[1])
                 self.selected_polygon.apply_transformation(matrix)
                 self.add_message(f"Масштабирование ({sx}, {sy}) применено")
-        except:
-            self.add_message("Ошибка ввода")
+                self.selected_polygon = None
+                self.temp_point = None
+        except Exception as e:
+            self.add_message(f"Ошибка ввода: {e}")
 
     def apply_scale_center(self, text, **params):
         """Применить масштабирование от центра"""
         try:
             parts = text.split(',')
-            sx = float(parts[0])
-            sy = float(parts[1])
+            sx = float(parts[0].strip())
+            sy = float(parts[1].strip())
 
             if self.selected_polygon:
                 cx, cy = self.selected_polygon.get_center()
                 matrix = scaling_matrix(sx, sy, cx, cy)
                 self.selected_polygon.apply_transformation(matrix)
-                self.add_message(f"Масштабирование ({sx}, {sy}) от центра")
-        except:
-            self.add_message("Ошибка ввода")
+                self.add_message(f"Масштабирование ({sx}, {sy}) от центра применено")
+                self.selected_polygon = None
+        except Exception as e:
+            self.add_message(f"Ошибка ввода: {e}")
 
     def draw(self):
         """Отрисовка всей сцены"""
@@ -439,6 +513,18 @@ class PolygonEditor:
             pygame.draw.circle(self.screen, config.RED,
                                (int(self.intersection_point[0]), int(self.intersection_point[1])), 8)
 
+        # Рисуем временную точку (центр вращения/масштабирования)
+        if self.temp_point:
+            pygame.draw.circle(self.screen, config.YELLOW,
+                               (int(self.temp_point[0]), int(self.temp_point[1])), 6)
+            pygame.draw.circle(self.screen, config.BLACK,
+                               (int(self.temp_point[0]), int(self.temp_point[1])), 6, 2)
+
+        # Визуальная подсказка при ожидании точки
+        if self.waiting_for_point:
+            mouse_pos = pygame.mouse.get_pos()
+            pygame.draw.circle(self.screen, config.YELLOW, mouse_pos, 5, 1)
+
         # Рисуем UI
         self.draw_ui()
 
@@ -453,7 +539,7 @@ class PolygonEditor:
         instructions = [
             "1-Создание | 2-Смещение | 3-Поворот(точка) | 4-Поворот(центр)",
             "5-Масштаб(точка) | 6-Масштаб(центр) | 7-Пересечение | 8-Точка в полигоне",
-            "9-Классификация | Enter-Завершить полигон | C-Очистить"
+            "9-Классификация | Enter-Завершить полигон | C-Очистить | ESC-Отмена"
         ]
 
         y_offset = config.HEIGHT - 190
@@ -463,8 +549,11 @@ class PolygonEditor:
             y_offset += 25
 
         # Текущий режим
-        mode_text = self.font.render(f"Режим: {self.mode}", True, config.BLACK)
-        self.screen.blit(mode_text, (10, config.HEIGHT - 90))
+        mode_text = f"Режим: {self.mode}"
+        if self.waiting_for_point:
+            mode_text += " (ожидание точки)"
+        mode_surface = self.font.render(mode_text, True, config.BLACK)
+        self.screen.blit(mode_surface, (10, config.HEIGHT - 90))
 
         # Сообщения
         y_offset = config.HEIGHT - 60
@@ -487,6 +576,8 @@ class PolygonEditor:
 
     def run(self):
         """Главный цикл программы"""
+        self.add_message("Добро пожаловать в редактор полигонов!🤗")
+
         while self.running:
             self.handle_events()
             self.draw()

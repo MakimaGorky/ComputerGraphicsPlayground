@@ -45,7 +45,7 @@ def point_position_relative_to_edge(point: Tuple[float, float],
     # Векторное произведение (cross product)
     cross = (x2 - x1) * (py - y1) - (y2 - y1) * (px - x1)
 
-    if abs(cross) < 1e-10:
+    if abs(cross) < 1e-6:
         return "на прямой"
     elif cross > 0:
         return "слева"
