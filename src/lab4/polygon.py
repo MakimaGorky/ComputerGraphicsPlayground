@@ -62,3 +62,12 @@ class Polygon:
             # Рисуем вершины
             for v in int_vertices:
                 pygame.draw.circle(screen, config.RED, v, config.VERTEX_RADIUS)
+
+    def __len__(self):
+        return len(self.vertices)
+
+    def __iter__(self):
+        return iter(self.vertices)
+
+    def __getitem__(self, index):
+        return self.vertices[index]

@@ -41,6 +41,10 @@ def point_position_relative_to_edge(point: Tuple[float, float],
     px, py = point
     x1, y1 = edge_start
     x2, y2 = edge_end
+    if y1 > y2:
+        x1, y1 = edge_end
+        x2, y2 = edge_start
+
 
     # Векторное произведение (cross product)
     cross = (x2 - x1) * (py - y1) - (y2 - y1) * (px - x1)
@@ -48,9 +52,9 @@ def point_position_relative_to_edge(point: Tuple[float, float],
     if abs(cross) < 1e-6:
         return "на прямой"
     elif cross > 0:
-        return "справа"
-    else:
         return "слева"
+    else:
+        return "справа"
 
 
 def point_in_polygon(point: Tuple[float, float], vertices: list) -> bool:

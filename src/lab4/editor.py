@@ -147,6 +147,8 @@ class PolygonEditor:
             self.switch_to_point_in_poly_mode()
         elif event.key == pygame.K_9:
             self.switch_to_classify_mode()
+        elif event.key == pygame.K_0:
+            self.switch_to_check_convex_mode()
         elif event.key == pygame.K_ESCAPE:
             # Отмена текущей операции
             self.waiting_for_point = False
@@ -229,6 +231,11 @@ class PolygonEditor:
         self.waiting_for_point = False
         self.add_message("Режим: классификация точки (выберите ребро)")
 
+    def switch_to_check_convex_mode(self):
+        self.mode = "check_convex"
+        self.finish_polygon()
+        self.add_message("Режим: проверка многоугольника на выпуклость (выберите точку)")
+
     def handle_mouse_click(self, pos: Tuple[int, int]):
         """Обработка кликов мыши в зависимости от режима"""
         x, y = pos
@@ -251,6 +258,8 @@ class PolygonEditor:
             self.handle_point_in_poly_click(x, y)
         elif self.mode == "classify":
             self.handle_classify_click(x, y)
+        elif self.mode == "check_convex":
+            self.handle_selecting_polygon(x, y)
 
     def handle_create_click(self, x: float, y: float):
         """Обработка клика в режиме создания"""
@@ -405,12 +414,69 @@ class PolygonEditor:
             # Готовы к следующей классификации
             self.intersection_edge = None
 
-    # Функции применения преобразований
+    def handle_selecting_polygon(self, x:float, y:float):
+        # check_convex
+        found = False
+        for poly in self.polygons:
+            if len(poly.vertices) >= 3:
+                inside = point_in_polygon((x, y), poly.vertices)
+                if inside:
+                    if self.is_convex(poly):
+                        self.add_message(f"Полигон выпуклый")
+                    else:
+                        self.add_message(f"Полигон НЕ выпуклый")
+                    found = True
+                    # Визуализируем точку
+                    point = Polygon()
+                    point.add_vertex(x, y)
+                    point.color = config.GREEN
+                    self.polygons.append(point)
+                    break
 
+        if not found:
+            self.add_message(f"Точка ({x:.0f}, {y:.0f}) снаружи всех полигонов")
+            # Визуализируем точку
+            point = Polygon()
+            point.add_vertex(x, y)
+            point.color = config.RED
+            self.polygons.append(point)
+
+    def is_convex(self, poly):
+        def get_rotate(p1, p2, p3):
+            x1, y1 = p1
+            x2, y2 = p2
+            x3, y3 = p3
+            x21, y21 = x1 - x2, y1 - y2
+            x23, y23 = x3 - x2, y3 - y2
+            return x21 * y23 - x23 * y21
+
+        if len(poly) <= 3:
+            # print('!')
+            return True
+        p1 = poly[0]
+        p2 = poly[1]
+        p3 = poly[2]
+        # print(p1, p2, p3)
+        rotate = get_rotate(p1, p2, p3)
+        # print(f'len: {len(poly)}')
+        # print(f'base rotate: {rotate}')
+
+        for p4 in poly[3:]:
+            # print(p4)
+            p1, p2, p3 = p2, p3, p4
+            # print(f'iter rotate: {get_rotate(p1, p2, p3)}')
+            if rotate * get_rotate(p1, p2, p3) < 0:
+                # повороты имеют разный знак
+                return False
+        # проверка последнего поворота
+        return rotate * get_rotate(p2, p3, poly[0]) >= 0
+
+
+    # Функции применения преобразований
     def apply_translation(self, text, **params):
         """Применить смещение"""
         try:
-            parts = text.split(',')
+            parts = text.split(',')  # 💩💩💩💩💩🤡🤡🤡🤡🤡
             dx = float(parts[0].strip())
             dy = float(parts[1].strip())
 
@@ -453,7 +519,7 @@ class PolygonEditor:
     def apply_scale_point(self, text, **params):
         """Применить масштабирование от точки"""
         try:
-            parts = text.split(',')
+            parts = text.split(',')  # 💩💩💩💩💩🤡🤡🤡🤡🤡
             sx = float(parts[0].strip())
             sy = float(parts[1].strip())
 
@@ -469,7 +535,7 @@ class PolygonEditor:
     def apply_scale_center(self, text, **params):
         """Применить масштабирование от центра"""
         try:
-            parts = text.split(',')
+            parts = text.split(',')  # 💩💩💩💩💩🤡🤡🤡🤡🤡
             sx = float(parts[0].strip())
             sy = float(parts[1].strip())
 
@@ -548,7 +614,8 @@ class PolygonEditor:
         instructions = [
             "1-Создание | 2-Смещение | 3-Поворот(точка) | 4-Поворот(центр)",
             "5-Масштаб(точка) | 6-Масштаб(центр) | 7-Пересечение | 8-Точка в полигоне",
-            "9-Классификация | Enter-Завершить полигон | C-Очистить | ESC-Отмена"
+            "9-Классификация | 0-Проверка на выпуклость",
+            "Enter-Завершить полигон | C-Очистить | ESC-Отмена"
         ]
 
         y_offset = config.HEIGHT - 190
