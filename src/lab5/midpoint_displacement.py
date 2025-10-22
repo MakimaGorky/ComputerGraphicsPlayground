@@ -17,7 +17,7 @@ class MountainMirthMachine:
     def midpoint_displacement(self, points):
         # чем больше шаг тем меньше displacement ☝
         Δ = self.current_displacement(self.steps())
-
+        
         res = []
         for i in range(len(points) - 1):
             x1, y1 = points[i]
