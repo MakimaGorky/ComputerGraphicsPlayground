@@ -23,3 +23,6 @@ FOCUS = 1.0
 ASPECT_RATIO = 1.0
 FAR = 250
 NEAR = 0.5
+
+# Параметры obj
+OBJ_SCALE = 300.0

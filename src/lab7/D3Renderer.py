@@ -336,7 +336,7 @@ def load_obj(filename: str) -> Object:
 
                 if parts[0] == 'v':
                     # Вершина
-                    x, y, z = float(parts[1]), float(parts[2]), float(parts[3])
+                    x, y, z = map(lambda x: x * config.OBJ_SCALE, [float(parts[1]), float(parts[2]), float(parts[3])])
                     vertices.append(Point(x, y, z))
 
                 elif parts[0] == 'f':
