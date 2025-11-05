@@ -70,6 +70,26 @@ def button(screen, font, rect: Rectangle, text: str) -> bool:
     return is_hovered and pygame.mouse.get_pressed()[0]
 
 
+def input_box(screen, font, rect: Rectangle, text: str, active: bool) -> str:
+    mouse_pos = pygame.mouse.get_pos()
+    is_hovered = (rect.x <= mouse_pos[0] <= rect.x + rect.width and
+                  rect.y <= mouse_pos[1] <= rect.y + rect.height)
+
+    color = (240, 240, 240) if active else (220, 220, 220)
+    if is_hovered:
+        color = (250, 250, 250)
+
+    pygame.draw.rect(screen, color, (rect.x, rect.y, rect.width, rect.height))
+    pygame.draw.rect(screen, (0, 0, 0), (rect.x, rect.y, rect.width, rect.height), 2)
+
+    text_surface = font.render(text, True, (0, 0, 0))
+    text_x = rect.x + 5
+    text_y = rect.y + (rect.height - text_surface.get_height()) / 2
+    screen.blit(text_surface, (text_x, text_y))
+
+    return is_hovered and pygame.mouse.get_pressed()[0]
+
+
 # ===== 3D Graphics =====
 
 class Point:
@@ -85,6 +105,9 @@ class Point:
         self.x = h[0]
         self.y = h[1]
         self.z = h[2]
+
+    def __str__(self):
+        return f"({self.x:.1f}, {self.y:.1f}, {self.z:.1f})"
 
 
 class Polygon:
@@ -297,7 +320,9 @@ def rotate_around_center(obj: Object, axis: str, angle: float):
     t2 = translation_matrix(center.x, center.y, center.z)
 
     matrix = np.dot(t2, np.dot(r, t1))
+
     obj.apply_transformation(matrix)
+
 
 
 def rotate_around_line(obj: Object, p1: Point, p2: Point, angle: float):
@@ -358,7 +383,7 @@ def render_point(vertex: Point, method: str, window: WindowInfo):
             [1, 0, 0, 0],
             [0, 1, 0, 0],
             [0, 0, 0, 0],
-            [0, 0, -1 / c, 1]
+            [0, 0, -1 / c,  1]
         ])
 
     projected_vertex = np.dot(projection_matrix, vertex_h)
@@ -448,56 +473,79 @@ def create_octahedron() -> Object:
 
 
 def create_icosahedron() -> Object:
-    """Создание икосаэдра"""
-    phi = (1 + np.sqrt(5)) / 2  # Золотое сечение
+    # Золотое сечение
+    phi = (1 + 5**0.5) / 2
     a = 100
 
+    # Вершины икосаэдра
     vertices = [
-        Point(0, a, phi * a), Point(0, -a, phi * a), Point(0, a, -phi * a), Point(0, -a, -phi * a),
-        Point(a, phi * a, 0), Point(-a, phi * a, 0), Point(a, -phi * a, 0), Point(-a, -phi * a, 0),
-        Point(phi * a, 0, a), Point(-phi * a, 0, a), Point(phi * a, 0, -a), Point(-phi * a, 0, -a)
+        Point(-a, phi * a, 0), Point(a, phi * a, 0), Point(-a, -phi * a, 0), Point(a, -phi * a, 0),
+        Point(0, -a, phi * a), Point(0, a, phi * a), Point(0, -a, -phi * a), Point(0, a, -phi * a),
+        Point(phi * a, 0, -a), Point(phi * a, 0, a), Point(-phi * a, 0, -a), Point(-phi * a, 0, a)
     ]
 
-    faces = [
-        [0, 1, 8], [0, 8, 4], [0, 4, 5], [0, 5, 9], [0, 9, 1],
-        [1, 6, 8], [8, 6, 10], [8, 10, 4], [4, 10, 2], [4, 2, 5],
-        [5, 2, 11], [5, 11, 9], [9, 11, 7], [9, 7, 1], [1, 7, 6],
-        [3, 2, 10], [3, 10, 6], [3, 6, 7], [3, 7, 11], [3, 11, 2]
+    # 12 вершин икосаэдра
+    # for i in [-1, 1]:
+    #     for j in [-1, 1]:
+    #         vertices.append(Point(0, i * phi * a, j * a))
+    #         vertices.append(Point(i * phi * a, j * a, 0))
+    #         vertices.append(Point(i * a, 0, j * phi * a))
+
+    icosa = Object()
+
+    # Создаем 20 треугольных граней икосаэдра
+    faces_indices = [
+        [0, 11, 5], [0, 5, 1], [0, 1, 7], [0, 7, 10], [0, 10, 11],
+        [1, 5, 9], [5, 11, 4], [11, 10, 2], [10, 7, 6], [7, 1, 8],
+        [3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9],
+        [4, 9, 5], [2, 4, 11], [6, 2, 10], [8, 6, 7], [9, 8, 1]
     ]
 
-    ico = Object()
-    for face in faces:
-        ico.add_face(Polygon([vertices[face[0]], vertices[face[1]], vertices[face[2]]]))
+    for face in faces_indices:
+        icosa.add_face(Polygon([vertices[face[0]], vertices[face[1]], vertices[face[2]]]))
 
-    return ico
+    # icosa.apply_transformation(scale_matrix(a, a, a))
 
+    return icosa
 
 def create_dodecahedron() -> Object:
-    """Создание додекаэдра"""
-    phi = (1 + np.sqrt(5)) / 2
-    a = 60
+    # Создаем додекаэдр как двойственный икосаэдру
+    # icosa = create_icosahedron()
+    phi =  1 + np.sqrt(5) / 2;
+    a = 100
 
-    vertices = [
-        Point(a, a, a), Point(a, a, -a), Point(a, -a, a), Point(a, -a, -a),
-        Point(-a, a, a), Point(-a, a, -a), Point(-a, -a, a), Point(-a, -a, -a),
-        Point(0, phi * a, a / phi), Point(0, phi * a, -a / phi), Point(0, -phi * a, a / phi),
-        Point(0, -phi * a, -a / phi),
-        Point(a / phi, 0, phi * a), Point(-a / phi, 0, phi * a), Point(a / phi, 0, -phi * a),
-        Point(-a / phi, 0, -phi * a),
-        Point(phi * a, a / phi, 0), Point(phi * a, -a / phi, 0), Point(-phi * a, a / phi, 0),
-        Point(-phi * a, -a / phi, 0)
+    vert = [
+        Point(a, a, a), Point(a,a,-a), Point(a,-a,a), Point(a,-a,-a),
+        Point(-a, a, a), Point(-a,a,-a), Point(-a,-a,a), Point(-a,-a,-a),
+        Point(0, 1 / phi * a, phi * a), Point(0, 1 / phi * a, -phi * a), Point(0, -1/phi * a, phi * a), Point(0, -1/phi * a, -phi * a),
+        Point(1 / phi * a, phi * a, 0), Point(1 / phi * a, -phi * a, 0), Point(-1/phi * a, phi * a, 0), Point(-1/phi * a, -phi * a, 0),
+        Point(phi * a, 0, 1 / phi * a), Point(phi * a, 0, -1 / phi * a), Point(-phi * a, 0, 1/phi * a), Point(-phi * a, 0, -1/phi * a),
     ]
-
-    faces = [
-        [0, 8, 9, 1, 16], [0, 16, 17, 2, 12], [12, 2, 10, 11, 3],
-        [9, 5, 15, 14, 1], [18, 5, 9, 8, 4], [19, 18, 4, 13, 6],
-        [7, 11, 10, 6, 19], [7, 15, 5, 18, 19], [7, 3, 14, 15, 11],
-        [0, 12, 13, 4, 8], [1, 14, 3, 17, 16], [6, 10, 2, 17, 3]
-    ]
+    # for f in icosa.polygons:
+    #     vert.append(f.get_center())
 
     dodeca = Object()
-    for face in faces:
-        dodeca.add_face(Polygon([vertices[i] for i in face]))
+
+    # Додекаэдр имеет 12 пятиугольных граней
+    # Группируем вершины по 5 вокруг каждой исходной вершины икосаэдра
+    face_groups = [
+        [0, 8, 10, 2, 16],    # Верхняя грань
+        [0, 16, 17, 1, 12],    # Нижняя грань
+        [0, 12, 14, 4, 8],  # Боковые грани
+        [17, 3, 11, 9, 1],
+        [2, 10, 6, 15, 13],
+        [13, 15, 7, 11, 3],
+        [17, 16, 2, 13, 3],
+        [14, 5, 19, 18, 4],
+        [9, 11, 7, 19, 5],
+        [18, 19, 7, 15, 6],
+        [12, 1, 9, 5, 14],
+        [4, 18, 6, 10, 8]
+    ]
+
+    for group in face_groups:
+        face_vertices = [vert[i] for i in group]
+        dodeca.add_face(Polygon(face_vertices))
 
     return dodeca
 
@@ -532,6 +580,7 @@ def task():
     ui_background_color = (220, 220, 220)
 
     font = pygame.font.Font(None, 28)
+    small_font = pygame.font.Font(None, 24)
 
     dropdown_bounds_objects = Rectangle(20, 20, 180, 35)
 
@@ -547,21 +596,52 @@ def task():
     last_object = -1
     last_render = -1
 
+    # Поля ввода параметров
+    input_boxes = {
+        "translation_x": "20",
+        "translation_y": "0",
+        "translation_z": "0",
+        "scale_x": "1.1",
+        "scale_y": "1.1",
+        "scale_z": "1.1",
+        "rotation_angle": "15",
+        "custom_line_p1": "0,0,0",
+        "custom_line_p2": "100,100,100",
+        "custom_rotation_angle": "30"
+    }
+
+    active_input = None
+
     # Кнопки управления
     y_offset = 80
     btn_width, btn_height = 200, 35
 
     transform_buttons = [
-        Rectangle(1000, y_offset, btn_width, btn_height),  # Перенос
-        Rectangle(1000, y_offset + 45, btn_width, btn_height),  # Масштаб
-        Rectangle(1000, y_offset + 90, btn_width, btn_height),  # Поворот X
-        Rectangle(1000, y_offset + 135, btn_width, btn_height),  # Поворот Y
-        Rectangle(1000, y_offset + 180, btn_width, btn_height),  # Поворот Z
-        Rectangle(1000, y_offset + 225, btn_width, btn_height),  # Отражение XY
-        Rectangle(1000, y_offset + 270, btn_width, btn_height),  # Отражение XZ
-        Rectangle(1000, y_offset + 315, btn_width, btn_height),  # Отражение YZ
-        Rectangle(1000, y_offset + 360, btn_width, btn_height),  # Сброс
+        Rectangle(1200, y_offset, btn_width, btn_height),  # Перенос
+        Rectangle(1200, y_offset + 45, btn_width, btn_height),  # Масштаб
+        Rectangle(1200, y_offset + 90, btn_width, btn_height),  # Поворот X
+        Rectangle(1200, y_offset + 135, btn_width, btn_height),  # Поворот Y
+        Rectangle(1200, y_offset + 180, btn_width, btn_height),  # Поворот Z
+        Rectangle(1200, y_offset + 225, btn_width, btn_height),  # Отражение XY
+        Rectangle(1200, y_offset + 270, btn_width, btn_height),  # Отражение XZ
+        Rectangle(1200, y_offset + 315, btn_width, btn_height),  # Отражение YZ
+        Rectangle(1200, y_offset + 360, btn_width, btn_height),  # Поворот вокруг произвольной прямой
+        Rectangle(1200, y_offset + 405, btn_width, btn_height),  # Сброс
     ]
+
+    # Поля ввода
+    input_rects = {
+        "translation_x": Rectangle(800, y_offset, 80, 30),
+        "translation_y": Rectangle(920, y_offset, 80, 30),
+        "translation_z": Rectangle(1040, y_offset, 80, 30),
+        "scale_x": Rectangle(800, y_offset + 45, 80, 30),
+        "scale_y": Rectangle(920, y_offset + 45, 80, 30),
+        "scale_z": Rectangle(1040, y_offset + 45, 80, 30),
+        "rotation_angle": Rectangle(800, y_offset + 135, 170, 30),
+        "custom_line_p1": Rectangle(800, y_offset + 360, 170, 30),
+        "custom_line_p2": Rectangle(800, y_offset + 395, 170, 30),
+        "custom_rotation_angle": Rectangle(800, y_offset + 430, 170, 30)
+    }
 
     running = True
     clock = pygame.time.Clock()
@@ -574,9 +654,25 @@ def task():
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     running = False
+                elif active_input and event.key == pygame.K_RETURN:
+                    active_input = None
+                elif active_input:
+                    if event.key == pygame.K_BACKSPACE:
+                        input_boxes[active_input] = input_boxes[active_input][:-1]
+                    else:
+                        # Проверяем, что вводим только цифры, запятые, точки и минусы
+                        if event.unicode in '0123456789,.-':
+                            input_boxes[active_input] += event.unicode
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:
                     button_clicked = True
+                    # Проверяем клик по полям ввода
+                    active_input = None
+                    for key, rect in input_rects.items():
+                        if (rect.x <= event.pos[0] <= rect.x + rect.width and
+                            rect.y <= event.pos[1] <= rect.y + rect.height):
+                            active_input = key
+                            break
 
         screen.fill(ui_background_color)
 
@@ -637,30 +733,77 @@ def task():
             rendered_object = render_object(main_object, renders[current_render], window_info)
             last_render = current_render
 
+        # Отображение центра объекта
+        center = main_object.get_center()
+        center_text = small_font.render(f"Центр: {center}", True, (0, 0, 0))
+        screen.blit(center_text, (20, 70))
+
+        # Поля ввода и кнопки преобразований
+
+        # Подписи к полям ввода
+        screen.blit(small_font.render("dx:", True, (0, 0, 0)), (770, y_offset + 5))
+        screen.blit(small_font.render("dy:", True, (0, 0, 0)), (890, y_offset + 5))
+        screen.blit(small_font.render("dz:", True, (0, 0, 0)), (1010, y_offset + 5))
+        screen.blit(small_font.render("sx:", True, (0, 0, 0)), (770, y_offset + 50))
+        screen.blit(small_font.render("sy:", True, (0, 0, 0)), (890, y_offset + 50))
+        screen.blit(small_font.render("sz:", True, (0, 0, 0)), (1010, y_offset + 50))
+        screen.blit(small_font.render("Угол (°):", True, (0, 0, 0)), (720, y_offset + 140))
+        screen.blit(small_font.render("Точка 1 (x,y,z):", True, (0, 0, 0)), (650, y_offset + 365))
+        screen.blit(small_font.render("Точка 2 (x,y,z):", True, (0, 0, 0)), (650, y_offset + 400))
+        screen.blit(small_font.render("Угол (°):", True, (0, 0, 0)), (650, y_offset + 435))
+
+        # Поля ввода
+        for key, rect in input_rects.items():
+            input_box(screen, small_font, rect, input_boxes[key], active_input == key)
+
         # Кнопки преобразований
-        if button(screen, font, transform_buttons[0], "Перенос +X") and button_clicked:
-            main_object.apply_transformation(translation_matrix(20, 0, 0))
-            rendered_object = render_object(main_object, renders[current_render], window_info)
+        if button(screen, font, transform_buttons[0], "Перенос") and button_clicked:
+            try:
+                dx = float(input_boxes["translation_x"])
+                dy = float(input_boxes["translation_y"])
+                dz = float(input_boxes["translation_z"])
+                main_object.apply_transformation(translation_matrix(dx, dy, dz))
+                rendered_object = render_object(main_object, renders[current_render], window_info)
+            except ValueError:
+                pass
             button_clicked = False
 
-        if button(screen, font, transform_buttons[1], "Масштаб ×1.1") and button_clicked:
-            scale_relative_to_center(main_object, 1.1, 1.1, 1.1)
-            rendered_object = render_object(main_object, renders[current_render], window_info)
+        if button(screen, font, transform_buttons[1], "Масштаб") and button_clicked:
+            try:
+                sx = float(input_boxes["scale_x"])
+                sy = float(input_boxes["scale_y"])
+                sz = float(input_boxes["scale_z"])
+                scale_relative_to_center(main_object, sx, sy, sz)
+                rendered_object = render_object(main_object, renders[current_render], window_info)
+            except ValueError:
+                pass
             button_clicked = False
 
-        if button(screen, font, transform_buttons[2], "Поворот X 15°") and button_clicked:
-            rotate_around_center(main_object, 'X', np.radians(15))
-            rendered_object = render_object(main_object, renders[current_render], window_info)
+        if button(screen, font, transform_buttons[2], "Поворот X") and button_clicked:
+            try:
+                angle = np.radians(float(input_boxes["rotation_angle"]) / 2)
+                rotate_around_center(main_object, 'X', angle)
+                rendered_object = render_object(main_object, renders[current_render], window_info)
+            except ValueError:
+                pass
             button_clicked = False
 
-        if button(screen, font, transform_buttons[3], "Поворот Y 15°") and button_clicked:
-            rotate_around_center(main_object, 'Y', np.radians(15))
-            rendered_object = render_object(main_object, renders[current_render], window_info)
+        if button(screen, font, transform_buttons[3], "Поворот Y") and button_clicked:
+            try:
+                angle = np.radians(float(input_boxes["rotation_angle"]) / 2)
+                rotate_around_center(main_object, 'Y', angle)
+                rendered_object = render_object(main_object, renders[current_render], window_info)
+            except ValueError:
+                pass
             button_clicked = False
 
-        if button(screen, font, transform_buttons[4], "Поворот Z 15°") and button_clicked:
-            rotate_around_center(main_object, 'Z', np.radians(15))
-            rendered_object = render_object(main_object, renders[current_render], window_info)
+        if button(screen, font, transform_buttons[4], "Поворот Z") and button_clicked:
+            try:
+                angle = np.radians(float(input_boxes["rotation_angle"]) / 2)
+                rotate_around_center(main_object, 'Z', angle)
+                rendered_object = render_object(main_object, renders[current_render], window_info)
+            except ValueError:
+                pass
             button_clicked = False
 
         if button(screen, font, transform_buttons[5], "Отражение XY") and button_clicked:
@@ -678,7 +821,23 @@ def task():
             rendered_object = render_object(main_object, renders[current_render], window_info)
             button_clicked = False
 
-        if button(screen, font, transform_buttons[8], "Сброс") and button_clicked:
+        if button(screen, font, transform_buttons[8], "Поворот вокруг прямой") and button_clicked:
+            try:
+                # Парсим координаты точек
+                p1_coords = [float(x.strip()) for x in input_boxes["custom_line_p1"].split(',')]
+                p2_coords = [float(x.strip()) for x in input_boxes["custom_line_p2"].split(',')]
+                angle = np.radians(float(input_boxes["custom_rotation_angle"]))
+
+                if len(p1_coords) == 3 and len(p2_coords) == 3:
+                    p1 = Point(p1_coords[0], p1_coords[1], p1_coords[2])
+                    p2 = Point(p2_coords[0], p2_coords[1], p2_coords[2])
+                    rotate_around_line(main_object, p1, p2, angle)
+                    rendered_object = render_object(main_object, renders[current_render], window_info)
+            except ValueError:
+                pass
+            button_clicked = False
+
+        if button(screen, font, transform_buttons[9], "Сброс") and button_clicked:
             main_object = objects[current_object].create()
             rendered_object = render_object(main_object, renders[current_render], window_info)
             button_clicked = False
