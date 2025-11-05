@@ -3,10 +3,9 @@ import math
 import numpy as np
 from typing import List, Tuple, Optional
 import config
-from datetime import datetime
 
-PIVOT = (800, 800)  # hold my 🍺
-Z_PIVOT = -1000  # hold my 🍺
+PIVOT = (300, 300)
+Z_PIVOT = -300
 WIDTH = 0
 HEIGHT = 0
 
@@ -71,26 +70,6 @@ def button(screen, font, rect: Rectangle, text: str) -> bool:
     return is_hovered and pygame.mouse.get_pressed()[0]
 
 
-def input_box(screen, font, rect: Rectangle, text: str, active: bool) -> str:
-    mouse_pos = pygame.mouse.get_pos()
-    is_hovered = (rect.x <= mouse_pos[0] <= rect.x + rect.width and
-                  rect.y <= mouse_pos[1] <= rect.y + rect.height)
-
-    color = (240, 240, 240) if active else (220, 220, 220)
-    if is_hovered:
-        color = (250, 250, 250)
-
-    pygame.draw.rect(screen, color, (rect.x, rect.y, rect.width, rect.height))
-    pygame.draw.rect(screen, (0, 0, 0), (rect.x, rect.y, rect.width, rect.height), 2)
-
-    text_surface = font.render(text, True, (0, 0, 0))
-    text_x = rect.x + 5
-    text_y = rect.y + (rect.height - text_surface.get_height()) / 2
-    screen.blit(text_surface, (text_x, text_y))
-
-    return is_hovered and pygame.mouse.get_pressed()[0]
-
-
 # ===== 3D Graphics =====
 
 class Point:
@@ -106,9 +85,6 @@ class Point:
         self.x = h[0]
         self.y = h[1]
         self.z = h[2]
-
-    def __str__(self):
-        return f"({self.x:.1f}, {self.y:.1f}, {self.z:.1f})"
 
 
 class Polygon:
@@ -204,7 +180,6 @@ class PolygonProjection:
 # ===== Матрицы преобразований =====
 
 def translation_matrix(dx: float, dy: float, dz: float) -> np.ndarray:
-    """Матрица переноса"""
     return np.array([
         [1, 0, 0, dx],
         [0, 1, 0, dy],
@@ -214,7 +189,6 @@ def translation_matrix(dx: float, dy: float, dz: float) -> np.ndarray:
 
 
 def scale_matrix(sx: float, sy: float, sz: float) -> np.ndarray:
-    """Матрица масштабирования"""
     return np.array([
         [sx, 0, 0, 0],
         [0, sy, 0, 0],
@@ -224,7 +198,6 @@ def scale_matrix(sx: float, sy: float, sz: float) -> np.ndarray:
 
 
 def rotation_x_matrix(angle: float) -> np.ndarray:
-    """Матрица поворота вокруг оси X"""
     c = np.cos(angle)
     s = np.sin(angle)
     return np.array([
@@ -236,7 +209,6 @@ def rotation_x_matrix(angle: float) -> np.ndarray:
 
 
 def rotation_y_matrix(angle: float) -> np.ndarray:
-    """Матрица поворота вокруг оси Y"""
     c = np.cos(angle)
     s = np.sin(angle)
     return np.array([
@@ -248,7 +220,6 @@ def rotation_y_matrix(angle: float) -> np.ndarray:
 
 
 def rotation_z_matrix(angle: float) -> np.ndarray:
-    """Матрица поворота вокруг оси Z"""
     c = np.cos(angle)
     s = np.sin(angle)
     return np.array([
@@ -260,7 +231,6 @@ def rotation_z_matrix(angle: float) -> np.ndarray:
 
 
 def reflection_xy_matrix() -> np.ndarray:
-    """Отражение относительно плоскости XY"""
     return np.array([
         [1, 0, 0, 0],
         [0, 1, 0, 0],
@@ -270,7 +240,6 @@ def reflection_xy_matrix() -> np.ndarray:
 
 
 def reflection_xz_matrix() -> np.ndarray:
-    """Отражение относительно плоскости XZ"""
     return np.array([
         [1, 0, 0, 0],
         [0, -1, 0, 0],
@@ -280,7 +249,6 @@ def reflection_xz_matrix() -> np.ndarray:
 
 
 def reflection_yz_matrix() -> np.ndarray:
-    """Отражение относительно плоскости YZ"""
     return np.array([
         [-1, 0, 0, 0],
         [0, 1, 0, 0],
@@ -290,271 +258,28 @@ def reflection_yz_matrix() -> np.ndarray:
 
 
 def scale_relative_to_center(obj: Object, sx: float, sy: float, sz: float):
-    """Масштабирование относительно центра объекта"""
     center = obj.get_center()
-
-    # Перенос в начало координат
     t1 = translation_matrix(-center.x, -center.y, -center.z)
-    # Масштабирование
     s = scale_matrix(sx, sy, sz)
-    # Перенос обратно
     t2 = translation_matrix(center.x, center.y, center.z)
-
-    # Комбинированная матрица
     matrix = np.dot(t2, np.dot(s, t1))
     obj.apply_transformation(matrix)
 
 
 def rotate_around_center(obj: Object, axis: str, angle: float):
-    """Вращение вокруг центра объекта"""
     center = obj.get_center()
-
     t1 = translation_matrix(-center.x, -center.y, -center.z)
 
     if axis == 'X':
         r = rotation_x_matrix(angle)
     elif axis == 'Y':
         r = rotation_y_matrix(angle)
-    else:  # Z
+    else:
         r = rotation_z_matrix(angle)
 
     t2 = translation_matrix(center.x, center.y, center.z)
-
     matrix = np.dot(t2, np.dot(r, t1))
-
     obj.apply_transformation(matrix)
-
-
-
-def rotate_around_line(obj: Object, p1: Point, p2: Point, angle: float):
-    """Поворот вокруг произвольной прямой"""
-    # Вектор направления прямой
-    dx = p2.x - p1.x
-    dy = p2.y - p1.y
-    dz = p2.z - p1.z
-
-    # Нормализация
-    length = np.sqrt(dx * dx + dy * dy + dz * dz)
-    if length < 1e-6:
-        return
-
-    dx /= length
-    dy /= length
-    dz /= length
-
-    # Перенос точки p1 в начало координат
-    t1 = translation_matrix(-p1.x, -p1.y, -p1.z)
-
-    # Поворот вокруг оси, заданной направляющим вектором (dx, dy, dz)
-    # Используем формулу Родрига
-    c = np.cos(angle)
-    s = np.sin(angle)
-    t = 1 - c
-
-    rotation = np.array([
-        [t * dx * dx + c, t * dx * dy - s * dz, t * dx * dz + s * dy, 0],
-        [t * dx * dy + s * dz, t * dy * dy + c, t * dy * dz - s * dx, 0],
-        [t * dx * dz - s * dy, t * dy * dz + s * dx, t * dz * dz + c, 0],
-        [0, 0, 0, 1]
-    ])
-
-    # Перенос обратно
-    t2 = translation_matrix(p1.x, p1.y, p1.z)
-
-    matrix = np.dot(t2, np.dot(rotation, t1))
-    obj.apply_transformation(matrix)
-
-
-# ===== Рендеринг =====
-
-def render_point(vertex: Point, method: str, window: WindowInfo):
-    vertex_h = np.array([vertex.x, vertex.y, vertex.z + Z_PIVOT, 1])
-
-    if method == "Аксонометрическая":
-        a = np.radians(config.ANGLE)
-        projection_matrix = np.array([
-            [1, 0, 0.5 * np.cos(a), 0],
-            [0, 1, 0.5 * np.cos(a), 0],
-            [0, 0, 0, 0],
-            [0, 0, 0, 1]
-        ])
-    else:  # Перспективная
-        c = config.V_POINT
-        projection_matrix = np.array([
-            [1, 0, 0, 0],
-            [0, 1, 0, 0],
-            [0, 0, 0, 0],
-            [0, 0, -1 / c,  1]
-        ])
-
-    projected_vertex = np.dot(projection_matrix, vertex_h)
-
-    if projected_vertex[3] != 0:
-        x_normalized = projected_vertex[0] / projected_vertex[3]
-        y_normalized = projected_vertex[1] / projected_vertex[3]
-        return (x_normalized, y_normalized)
-
-    return (0, 0)
-
-
-def render_polygon(poly: Polygon, method: str, window: WindowInfo):
-    pp = PolygonProjection()
-    for v in poly.vertices:
-        p = render_point(v, method, window)
-        pp.add_vertex(p)
-    return pp
-
-
-def render_object(obj: Object, method: str, window: WindowInfo):
-    projected_obj = []
-    for p in obj.polygons:
-        projected_obj.append(render_polygon(p, method, window))
-    return projected_obj
-
-
-# ===== Создание объектов =====
-
-def create_cube() -> Object:
-    points = [
-        Point(0.0, 0.0, 0.0),
-        Point(200.0, 0.0, 0.0),
-        Point(200.0, 200.0, 0.0),
-        Point(0.0, 200.0, 0.0),
-        Point(0.0, 0.0, 200.0),
-        Point(200.0, 0.0, 200.0),
-        Point(200.0, 200.0, 200.0),
-        Point(0.0, 200.0, 200.0)
-    ]
-
-    cube = Object([
-        Polygon([points[0], points[1], points[2], points[3]]),
-        Polygon([points[0], points[1], points[5], points[4]]),
-        Polygon([points[1], points[2], points[6], points[5]]),
-        Polygon([points[2], points[3], points[7], points[6]]),
-        Polygon([points[0], points[3], points[7], points[4]]),
-        Polygon([points[4], points[5], points[6], points[7]])
-    ])
-    return cube
-
-
-def create_tetrahedron() -> Object:
-    cube = create_cube()
-    tetr = Object()
-
-    vert = [
-        cube.polygons[0].vertices[1],
-        cube.polygons[0].vertices[3],
-        cube.polygons[5].vertices[0],
-        cube.polygons[5].vertices[2]
-    ]
-
-    tetr.add_face(Polygon([vert[1], vert[2], vert[3]]))
-    tetr.add_face(Polygon([vert[0], vert[1], vert[2]]))
-    tetr.add_face(Polygon([vert[0], vert[2], vert[3]]))
-    tetr.add_face(Polygon([vert[0], vert[3], vert[1]]))
-
-    return tetr
-
-
-def create_octahedron() -> Object:
-    cube = create_cube()
-    vert = []
-    for f in cube.polygons:
-        vert.append(f.get_center())
-
-    octa = Object()
-    octa.add_face(Polygon([vert[0], vert[1], vert[4]]))
-    octa.add_face(Polygon([vert[5], vert[1], vert[4]]))
-
-    for i in range(3):
-        octa.add_face(Polygon([vert[0], vert[i + 1], vert[(i + 1) % 4 + 1]]))
-        octa.add_face(Polygon([vert[5], vert[i + 1], vert[(i + 1) % 4 + 1]]))
-
-    return octa
-
-
-def create_icosahedron() -> Object:
-    # Золотое сечение
-    phi = (1 + 5**0.5) / 2
-    a = 100
-
-    # Вершины икосаэдра
-    vertices = [
-        Point(-a, phi * a, 0), Point(a, phi * a, 0), Point(-a, -phi * a, 0), Point(a, -phi * a, 0),
-        Point(0, -a, phi * a), Point(0, a, phi * a), Point(0, -a, -phi * a), Point(0, a, -phi * a),
-        Point(phi * a, 0, -a), Point(phi * a, 0, a), Point(-phi * a, 0, -a), Point(-phi * a, 0, a)
-    ]
-
-    # 12 вершин икосаэдра
-    # for i in [-1, 1]:
-    #     for j in [-1, 1]:
-    #         vertices.append(Point(0, i * phi * a, j * a))
-    #         vertices.append(Point(i * phi * a, j * a, 0))
-    #         vertices.append(Point(i * a, 0, j * phi * a))
-
-    icosa = Object()
-
-    # Создаем 20 треугольных граней икосаэдра
-    faces_indices = [
-        [0, 11, 5], [0, 5, 1], [0, 1, 7], [0, 7, 10], [0, 10, 11],
-        [1, 5, 9], [5, 11, 4], [11, 10, 2], [10, 7, 6], [7, 1, 8],
-        [3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9],
-        [4, 9, 5], [2, 4, 11], [6, 2, 10], [8, 6, 7], [9, 8, 1]
-    ]
-
-    for face in faces_indices:
-        icosa.add_face(Polygon([vertices[face[0]], vertices[face[1]], vertices[face[2]]]))
-
-    # icosa.apply_transformation(scale_matrix(a, a, a))
-
-    return icosa
-
-def create_dodecahedron() -> Object:
-    # Создаем додекаэдр как двойственный икосаэдру
-    # icosa = create_icosahedron()
-    phi =  1 + np.sqrt(5) / 2;
-    a = 100
-
-    vert = [
-        Point(a, a, a), Point(a,a,-a), Point(a,-a,a), Point(a,-a,-a),
-        Point(-a, a, a), Point(-a,a,-a), Point(-a,-a,a), Point(-a,-a,-a),
-        Point(0, 1 / phi * a, phi * a), Point(0, 1 / phi * a, -phi * a), Point(0, -1/phi * a, phi * a), Point(0, -1/phi * a, -phi * a),
-        Point(1 / phi * a, phi * a, 0), Point(1 / phi * a, -phi * a, 0), Point(-1/phi * a, phi * a, 0), Point(-1/phi * a, -phi * a, 0),
-        Point(phi * a, 0, 1 / phi * a), Point(phi * a, 0, -1 / phi * a), Point(-phi * a, 0, 1/phi * a), Point(-phi * a, 0, -1/phi * a),
-    ]
-    # for f in icosa.polygons:
-    #     vert.append(f.get_center())
-
-    dodeca = Object()
-
-    # Додекаэдр имеет 12 пятиугольных граней
-    # Группируем вершины по 5 вокруг каждой исходной вершины икосаэдра
-    face_groups = [
-        [0, 8, 10, 2, 16],    # Верхняя грань
-        [0, 16, 17, 1, 12],    # Нижняя грань
-        [0, 12, 14, 4, 8],  # Боковые грани
-        [17, 3, 11, 9, 1],
-        [2, 10, 6, 15, 13],
-        [13, 15, 7, 11, 3],
-        [17, 16, 2, 13, 3],
-        [14, 5, 19, 18, 4],
-        [9, 11, 7, 19, 5],
-        [18, 19, 7, 15, 6],
-        [12, 1, 9, 5, 14],
-        [4, 18, 6, 10, 8]
-    ]
-
-    for group in face_groups:
-        face_vertices = [vert[i] for i in group]
-        dodeca.add_face(Polygon(face_vertices))
-
-    return dodeca
-
-
-
-
-
-
 
 
 # ===== OBJ файлы =====
@@ -578,7 +303,7 @@ def save_obj(obj: Object, filename: str):
 
         # Записываем вершины
         for v in vertices:
-            f.write(f"v {v.x} {-v.y} {v.z}\n")
+            f.write(f"v {v.x} {v.y} {v.z}\n")
 
         f.write("\n")
 
@@ -611,8 +336,8 @@ def load_obj(filename: str) -> Object:
 
                 if parts[0] == 'v':
                     # Вершина
-                    x, y, z = map(lambda x: x, [float(parts[1]), float(parts[2]), float(parts[3])])
-                    vertices.append(Point(x, -y, z))
+                    x, y, z = map(lambda x: x * config.OBJ_SCALE, [float(parts[1]), float(parts[2]), float(parts[3])])
+                    vertices.append(Point(x, y, z))
 
                 elif parts[0] == 'f':
                     # Грань
@@ -741,12 +466,211 @@ def create_surface(func, x_range: Tuple[float, float], y_range: Tuple[float, flo
     return obj
 
 
+# ===== Рендеринг =====
+
+def render_point(vertex: Point, method: str, window: WindowInfo):
+    vertex_h = np.array([vertex.x, vertex.y, vertex.z + Z_PIVOT, 1])
+
+    if method == "Аксонометрическая":
+        a = np.radians(config.ANGLE)
+        projection_matrix = np.array([
+            [1, 0, 0.5 * np.cos(a), 0],
+            [0, 1, 0.5 * np.cos(a), 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 1]
+        ])
+    else:  # Перспективная
+        c = config.V_POINT
+        projection_matrix = np.array([
+            [1, 0, 0, 0],
+            [0, 1, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, -1 / c, 1]
+        ])
+
+    projected_vertex = np.dot(projection_matrix, vertex_h)
+
+    if projected_vertex[3] != 0:
+        x_normalized = projected_vertex[0] / projected_vertex[3]
+        y_normalized = projected_vertex[1] / projected_vertex[3]
+        return (x_normalized, y_normalized)
+
+    return (0, 0)
 
 
+def render_polygon(poly: Polygon, method: str, window: WindowInfo):
+    pp = PolygonProjection()
+    for v in poly.vertices:
+        p = render_point(v, method, window)
+        pp.add_vertex(p)
+    return pp
 
 
+def render_object(obj: Object, method: str, window: WindowInfo):
+    projected_obj = []
+    for p in obj.polygons:
+        projected_obj.append(render_polygon(p, method, window))
+    return projected_obj
 
 
+# ===== Создание объектов =====
+
+def create_cube() -> Object:
+    points = [
+        Point(0.0, 0.0, 0.0),
+        Point(200.0, 0.0, 0.0),
+        Point(200.0, 200.0, 0.0),
+        Point(0.0, 200.0, 0.0),
+        Point(0.0, 0.0, 200.0),
+        Point(200.0, 0.0, 200.0),
+        Point(200.0, 200.0, 200.0),
+        Point(0.0, 200.0, 200.0)
+    ]
+
+    cube = Object([
+        Polygon([points[0], points[1], points[2], points[3]]),
+        Polygon([points[0], points[1], points[5], points[4]]),
+        Polygon([points[1], points[2], points[6], points[5]]),
+        Polygon([points[2], points[3], points[7], points[6]]),
+        Polygon([points[0], points[3], points[7], points[4]]),
+        Polygon([points[4], points[5], points[6], points[7]])
+    ])
+    return cube
+
+
+def create_tetrahedron() -> Object:
+    cube = create_cube()
+    tetr = Object()
+
+    vert = [
+        cube.polygons[0].vertices[1],
+        cube.polygons[0].vertices[3],
+        cube.polygons[5].vertices[0],
+        cube.polygons[5].vertices[2]
+    ]
+
+    tetr.add_face(Polygon([vert[1], vert[2], vert[3]]))
+    tetr.add_face(Polygon([vert[0], vert[1], vert[2]]))
+    tetr.add_face(Polygon([vert[0], vert[2], vert[3]]))
+    tetr.add_face(Polygon([vert[0], vert[3], vert[1]]))
+
+    return tetr
+
+
+def create_octahedron() -> Object:
+    cube = create_cube()
+    vert = []
+    for f in cube.polygons:
+        vert.append(f.get_center())
+
+    octa = Object()
+    octa.add_face(Polygon([vert[0], vert[1], vert[4]]))
+    octa.add_face(Polygon([vert[5], vert[1], vert[4]]))
+
+    for i in range(3):
+        octa.add_face(Polygon([vert[0], vert[i + 1], vert[(i + 1) % 4 + 1]]))
+        octa.add_face(Polygon([vert[5], vert[i + 1], vert[(i + 1) % 4 + 1]]))
+
+    return octa
+
+
+def create_icosahedron() -> Object:
+    phi = (1 + np.sqrt(5)) / 2
+    a = 100
+
+    vertices = [
+        Point(0, a, phi * a), Point(0, -a, phi * a), Point(0, a, -phi * a), Point(0, -a, -phi * a),
+        Point(a, phi * a, 0), Point(-a, phi * a, 0), Point(a, -phi * a, 0), Point(-a, -phi * a, 0),
+        Point(phi * a, 0, a), Point(-phi * a, 0, a), Point(phi * a, 0, -a), Point(-phi * a, 0, -a)
+    ]
+
+    faces = [
+        [0, 1, 8], [0, 8, 4], [0, 4, 5], [0, 5, 9], [0, 9, 1],
+        [1, 6, 8], [8, 6, 10], [8, 10, 4], [4, 10, 2], [4, 2, 5],
+        [5, 2, 11], [5, 11, 9], [9, 11, 7], [9, 7, 1], [1, 7, 6],
+        [3, 2, 10], [3, 10, 6], [3, 6, 7], [3, 7, 11], [3, 11, 2]
+    ]
+
+    ico = Object()
+    for face in faces:
+        ico.add_face(Polygon([vertices[face[0]], vertices[face[1]], vertices[face[2]]]))
+
+    return ico
+
+
+def create_dodecahedron() -> Object:
+    phi = (1 + np.sqrt(5)) / 2
+    a = 60
+
+    vertices = [
+        Point(a, a, a), Point(a, a, -a), Point(a, -a, a), Point(a, -a, -a),
+        Point(-a, a, a), Point(-a, a, -a), Point(-a, -a, a), Point(-a, -a, -a),
+        Point(0, phi * a, a / phi), Point(0, phi * a, -a / phi), Point(0, -phi * a, a / phi),
+        Point(0, -phi * a, -a / phi),
+        Point(a / phi, 0, phi * a), Point(-a / phi, 0, phi * a), Point(a / phi, 0, -phi * a),
+        Point(-a / phi, 0, -phi * a),
+        Point(phi * a, a / phi, 0), Point(phi * a, -a / phi, 0), Point(-phi * a, a / phi, 0),
+        Point(-phi * a, -a / phi, 0)
+    ]
+
+    faces = [
+        [0, 8, 9, 1, 16], [0, 16, 17, 2, 12], [12, 2, 10, 11, 3],
+        [9, 5, 15, 14, 1], [18, 5, 9, 8, 4], [19, 18, 4, 13, 6],
+        [7, 11, 10, 6, 19], [7, 15, 5, 18, 19], [7, 3, 14, 15, 11],
+        [0, 12, 13, 4, 8], [1, 14, 3, 17, 16], [6, 10, 2, 17, 3]
+    ]
+
+    dodeca = Object()
+    for face in faces:
+        dodeca.add_face(Polygon([vertices[i] for i in face]))
+
+    return dodeca
+
+
+# Пример образующей для фигуры вращения
+def create_vase_profile() -> List[Point]:
+    """Создает образующую для вазы"""
+    profile = []
+    # Создаем профиль вазы
+    for i in range(11):
+        t = i / 10.0
+        y = t * 200 - 100
+
+        # Форма вазы (параболическая)
+        if t < 0.3:
+            x = 30 + t * 50
+        elif t < 0.7:
+            x = 45 - (t - 0.5) ** 2 * 100
+        else:
+            x = 30 + (1 - t) * 70
+
+        profile.append(Point(x, y, 0))
+
+    return profile
+
+
+# Примеры функций для графиков
+def func_sin_cos(x, y):
+    """z = sin(x) * cos(y)"""
+    return 50 * np.sin(x) * np.cos(y)
+
+
+def func_paraboloid(x, y):
+    """z = x^2 + y^2"""
+    return (x ** 2 + y ** 2) / 20
+
+
+def func_saddle(x, y):
+    """z = x^2 - y^2"""
+    return (x ** 2 - y ** 2) / 20
+
+
+def func_wave(x, y):
+    """z = sin(sqrt(x^2 + y^2))"""
+    r = np.sqrt(x ** 2 + y ** 2)
+    if r < 0.01:
+        return 50
+    return 50 * np.sin(r) / r
 
 
 # ===== Main =====
@@ -761,7 +685,7 @@ def task():
     pygame.init()
 
     screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
-    pygame.display.set_caption("3DRenderer")
+    pygame.display.set_caption("3DRenderer - Extended")
 
     window_info = get_window_info(screen)
 
@@ -770,7 +694,12 @@ def task():
         ObjectOption("Гексаэдр", create_cube),
         ObjectOption("Октаэдр", create_octahedron),
         ObjectOption("Икосаэдр", create_icosahedron),
-        ObjectOption("Додекаэдр", create_dodecahedron)
+        ObjectOption("Додекаэдр", create_dodecahedron),
+        ObjectOption("Ваза (врващ)", lambda: create_rotation_figure(create_vase_profile(), 'Y', 16)),
+        ObjectOption("sin*cos", lambda: create_surface(func_sin_cos, (-5, 5), (-5, 5), 20, 20)),
+        ObjectOption("Параболоид", lambda: create_surface(func_paraboloid, (-5, 5), (-5, 5), 20, 20)),
+        ObjectOption("Седло", lambda: create_surface(func_saddle, (-5, 5), (-5, 5), 20, 20)),
+        ObjectOption("Волна", lambda: create_surface(func_wave, (-10, 10), (-10, 10), 30, 30)),
     ]
 
     object_count = len(objects)
@@ -779,7 +708,6 @@ def task():
     ui_background_color = (220, 220, 220)
 
     font = pygame.font.Font(None, 28)
-    small_font = pygame.font.Font(None, 24)
 
     dropdown_bounds_objects = Rectangle(20, 20, 180, 35)
 
@@ -795,54 +723,21 @@ def task():
     last_object = -1
     last_render = -1
 
-    # Поля ввода параметров
-    input_boxes = {
-        "translation_x": "0",
-        "translation_y": "20",
-        "translation_z": "0",
-        "scale_x": "1.1",
-        "scale_y": "1.1",
-        "scale_z": "1.1",
-        "rotation_angle": "15",
-        "custom_line_p1": "0,0,0",
-        "custom_line_p2": "100,100,100",
-        "custom_rotation_angle": "30",
-        "filename": "model.obj"
-    }
-
-    active_input = None
-
     # Кнопки управления
     y_offset = 80
     btn_width, btn_height = 200, 35
 
     transform_buttons = [
-        Rectangle(1200, y_offset, btn_width, btn_height),  # Перенос
-        Rectangle(1200, y_offset + 45, btn_width, btn_height),  # Масштаб
-        Rectangle(1200, y_offset + 90, btn_width, btn_height),  # Поворот X
-        Rectangle(1200, y_offset + 135, btn_width, btn_height),  # Поворот Y
-        Rectangle(1200, y_offset + 180, btn_width, btn_height),  # Поворот Z
-        Rectangle(1200, y_offset + 225, btn_width, btn_height),  # Отражение XY
-        Rectangle(1200, y_offset + 270, btn_width, btn_height),  # Отражение XZ
-        Rectangle(1200, y_offset + 315, btn_width, btn_height),  # Отражение YZ
-        Rectangle(1200, y_offset + 360, btn_width, btn_height),  # Поворот вокруг произвольной прямой
-        Rectangle(1200, y_offset + 405, btn_width, btn_height),  # Сброс
+        Rectangle(1000, y_offset, btn_width, btn_height),  # Перенос
+        Rectangle(1000, y_offset + 45, btn_width, btn_height),  # Масштаб
+        Rectangle(1000, y_offset + 90, btn_width, btn_height),  # Поворот X
+        Rectangle(1000, y_offset + 135, btn_width, btn_height),  # Поворот Y
+        Rectangle(1000, y_offset + 180, btn_width, btn_height),  # Поворот Z
+        Rectangle(1000, y_offset + 225, btn_width, btn_height),  # Отражение XY
+        Rectangle(1000, y_offset + 270, btn_width, btn_height),  # Отражение XZ
+        Rectangle(1000, y_offset + 315, btn_width, btn_height),  # Отражение YZ
+        Rectangle(1000, y_offset + 360, btn_width, btn_height),  # Сброс
     ]
-
-    # Поля ввода
-    input_rects = {
-        "translation_x": Rectangle(800, y_offset, 80, 30),
-        "translation_y": Rectangle(920, y_offset, 80, 30),
-        "translation_z": Rectangle(1040, y_offset, 80, 30),
-        "scale_x": Rectangle(800, y_offset + 45, 80, 30),
-        "scale_y": Rectangle(920, y_offset + 45, 80, 30),
-        "scale_z": Rectangle(1040, y_offset + 45, 80, 30),
-        "rotation_angle": Rectangle(800, y_offset + 135, 170, 30),
-        "custom_line_p1": Rectangle(800, y_offset + 360, 170, 30),
-        "custom_line_p2": Rectangle(800, y_offset + 395, 170, 30),
-        "custom_rotation_angle": Rectangle(800, y_offset + 430, 170, 30),
-        "filename": Rectangle(20, window_info.height - 185, 150, 35)
-    }
 
     # Кнопки файловых операций
     file_buttons = [
@@ -861,25 +756,9 @@ def task():
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     running = False
-                elif active_input and event.key == pygame.K_RETURN:
-                    active_input = None
-                elif active_input:
-                    if event.key == pygame.K_BACKSPACE:
-                        input_boxes[active_input] = input_boxes[active_input][:-1]
-                    else:
-                        # Проверяем, что вводим только цифры, запятые, точки и минусы
-                        if True:
-                            input_boxes[active_input] += event.unicode
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:
                     button_clicked = True
-                    # Проверяем клик по полям ввода
-                    active_input = None
-                    for key, rect in input_rects.items():
-                        if (rect.x <= event.pos[0] <= rect.x + rect.width and
-                            rect.y <= event.pos[1] <= rect.y + rect.height):
-                            active_input = key
-                            break
 
         screen.fill(ui_background_color)
 
@@ -940,77 +819,30 @@ def task():
             rendered_object = render_object(main_object, renders[current_render], window_info)
             last_render = current_render
 
-        # Отображение центра объекта
-        center = main_object.get_center()
-        center_text = small_font.render(f"Центр: {center}", True, (0, 0, 0))
-        screen.blit(center_text, (20, 70))
-
-        # Поля ввода и кнопки преобразований
-
-        # Подписи к полям ввода
-        screen.blit(small_font.render("dx:", True, (0, 0, 0)), (770, y_offset + 5))
-        screen.blit(small_font.render("dy:", True, (0, 0, 0)), (890, y_offset + 5))
-        screen.blit(small_font.render("dz:", True, (0, 0, 0)), (1010, y_offset + 5))
-        screen.blit(small_font.render("sx:", True, (0, 0, 0)), (770, y_offset + 50))
-        screen.blit(small_font.render("sy:", True, (0, 0, 0)), (890, y_offset + 50))
-        screen.blit(small_font.render("sz:", True, (0, 0, 0)), (1010, y_offset + 50))
-        screen.blit(small_font.render("Угол (°):", True, (0, 0, 0)), (720, y_offset + 140))
-        screen.blit(small_font.render("Точка 1 (x,y,z):", True, (0, 0, 0)), (650, y_offset + 365))
-        screen.blit(small_font.render("Точка 2 (x,y,z):", True, (0, 0, 0)), (650, y_offset + 400))
-        screen.blit(small_font.render("Угол (°):", True, (0, 0, 0)), (650, y_offset + 435))
-
-        # Поля ввода
-        for key, rect in input_rects.items():
-            input_box(screen, small_font, rect, input_boxes[key], active_input == key)
-
         # Кнопки преобразований
-        if button(screen, font, transform_buttons[0], "Перенос") and button_clicked:
-            try:
-                dx = float(input_boxes["translation_x"])
-                dy = float(input_boxes["translation_y"])
-                dz = float(input_boxes["translation_z"])
-                main_object.apply_transformation(translation_matrix(dx, dy, dz))
-                rendered_object = render_object(main_object, renders[current_render], window_info)
-            except ValueError:
-                pass
+        if button(screen, font, transform_buttons[0], "Перенос +X") and button_clicked:
+            main_object.apply_transformation(translation_matrix(20, 0, 0))
+            rendered_object = render_object(main_object, renders[current_render], window_info)
             button_clicked = False
 
-        if button(screen, font, transform_buttons[1], "Масштаб") and button_clicked:
-            try:
-                sx = float(input_boxes["scale_x"])
-                sy = float(input_boxes["scale_y"])
-                sz = float(input_boxes["scale_z"])
-                scale_relative_to_center(main_object, sx, sy, sz)
-                rendered_object = render_object(main_object, renders[current_render], window_info)
-            except ValueError:
-                pass
+        if button(screen, font, transform_buttons[1], "Масштаб ×1.1") and button_clicked:
+            scale_relative_to_center(main_object, 1.1, 1.1, 1.1)
+            rendered_object = render_object(main_object, renders[current_render], window_info)
             button_clicked = False
 
-        if button(screen, font, transform_buttons[2], "Поворот X") and button_clicked:
-            try:
-                angle = np.radians(float(input_boxes["rotation_angle"]) / 2)
-                rotate_around_center(main_object, 'X', angle)
-                rendered_object = render_object(main_object, renders[current_render], window_info)
-            except ValueError:
-                pass
+        if button(screen, font, transform_buttons[2], "Поворот X 15°") and button_clicked:
+            rotate_around_center(main_object, 'X', np.radians(15))
+            rendered_object = render_object(main_object, renders[current_render], window_info)
             button_clicked = False
 
-        if button(screen, font, transform_buttons[3], "Поворот Y") and button_clicked:
-            try:
-                angle = np.radians(float(input_boxes["rotation_angle"]) / 2)
-                rotate_around_center(main_object, 'Y', angle)
-                rendered_object = render_object(main_object, renders[current_render], window_info)
-            except ValueError:
-                pass
+        if button(screen, font, transform_buttons[3], "Поворот Y 15°") and button_clicked:
+            rotate_around_center(main_object, 'Y', np.radians(15))
+            rendered_object = render_object(main_object, renders[current_render], window_info)
             button_clicked = False
 
-        if button(screen, font, transform_buttons[4], "Поворот Z") and button_clicked:
-            try:
-                angle = np.radians(float(input_boxes["rotation_angle"]) / 2)
-                rotate_around_center(main_object, 'Z', angle)
-                rendered_object = render_object(main_object, renders[current_render], window_info)
-            except ValueError:
-                pass
+        if button(screen, font, transform_buttons[4], "Поворот Z 15°") and button_clicked:
+            rotate_around_center(main_object, 'Z', np.radians(15))
+            rendered_object = render_object(main_object, renders[current_render], window_info)
             button_clicked = False
 
         if button(screen, font, transform_buttons[5], "Отражение XY") and button_clicked:
@@ -1028,35 +860,19 @@ def task():
             rendered_object = render_object(main_object, renders[current_render], window_info)
             button_clicked = False
 
-        if button(screen, font, transform_buttons[8], "Поворот вокруг прямой") and button_clicked:
-            try:
-                # Парсим координаты точек
-                p1_coords = [float(x.strip()) for x in input_boxes["custom_line_p1"].split(',')]
-                p2_coords = [float(x.strip()) for x in input_boxes["custom_line_p2"].split(',')]
-                angle = np.radians(float(input_boxes["custom_rotation_angle"]))
-
-                if len(p1_coords) == 3 and len(p2_coords) == 3:
-                    p1 = Point(p1_coords[0], p1_coords[1], p1_coords[2])
-                    p2 = Point(p2_coords[0], p2_coords[1], p2_coords[2])
-                    rotate_around_line(main_object, p1, p2, angle)
-                    rendered_object = render_object(main_object, renders[current_render], window_info)
-            except ValueError:
-                pass
-            button_clicked = False
-
-        if button(screen, font, transform_buttons[9], "Сброс") and button_clicked:
+        if button(screen, font, transform_buttons[8], "Сброс") and button_clicked:
             main_object = objects[current_object].create()
             rendered_object = render_object(main_object, renders[current_render], window_info)
             button_clicked = False
 
-                # Кнопки файловых операций
+        # Кнопки файловых операций
         if button(screen, font, file_buttons[0], "Загрузить OBJ") and button_clicked:
             # Простой диалог ввода имени файла через консоль
             print("\n=== ЗАГРУЗКА МОДЕЛИ ===")
             print("Введите имя файла (например: model.obj):")
             # В реальной программе здесь был бы GUI диалог
             # Для демонстрации используем предустановленное имя
-            filename = input_boxes["filename"]
+            filename = "model.obj"
             try:
                 main_object = load_obj(filename)
                 rendered_object = render_object(main_object, renders[current_render], window_info)
@@ -1068,13 +884,12 @@ def task():
             print("\n=== СОХРАНЕНИЕ МОДЕЛИ ===")
             print("Введите имя файла (например: output.obj):")
             # В реальной программе здесь был бы GUI диалог
-            filename = f"saved_model_{datetime.now().strftime('%H:%M:%S')}.obj"
+            filename = f"saved_model_{current_object}.obj"
             try:
                 save_obj(main_object, filename)
             except Exception as e:
                 print(f"Ошибка сохранения: {e}")
             button_clicked = False
-
 
         pygame.display.flip()
         clock.tick(60)
