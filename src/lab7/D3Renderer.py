@@ -4,8 +4,8 @@ import numpy as np
 from typing import List, Tuple, Optional
 import config
 
-PIVOT = (300, 300)  # hold my 🍺
-Z_PIVOT = -300  # hold my 🍺
+PIVOT = (300, 300)
+Z_PIVOT = -300
 WIDTH = 0
 HEIGHT = 0
 
@@ -180,7 +180,6 @@ class PolygonProjection:
 # ===== Матрицы преобразований =====
 
 def translation_matrix(dx: float, dy: float, dz: float) -> np.ndarray:
-    """Матрица переноса"""
     return np.array([
         [1, 0, 0, dx],
         [0, 1, 0, dy],
@@ -190,7 +189,6 @@ def translation_matrix(dx: float, dy: float, dz: float) -> np.ndarray:
 
 
 def scale_matrix(sx: float, sy: float, sz: float) -> np.ndarray:
-    """Матрица масштабирования"""
     return np.array([
         [sx, 0, 0, 0],
         [0, sy, 0, 0],
@@ -200,7 +198,6 @@ def scale_matrix(sx: float, sy: float, sz: float) -> np.ndarray:
 
 
 def rotation_x_matrix(angle: float) -> np.ndarray:
-    """Матрица поворота вокруг оси X"""
     c = np.cos(angle)
     s = np.sin(angle)
     return np.array([
@@ -212,7 +209,6 @@ def rotation_x_matrix(angle: float) -> np.ndarray:
 
 
 def rotation_y_matrix(angle: float) -> np.ndarray:
-    """Матрица поворота вокруг оси Y"""
     c = np.cos(angle)
     s = np.sin(angle)
     return np.array([
@@ -224,7 +220,6 @@ def rotation_y_matrix(angle: float) -> np.ndarray:
 
 
 def rotation_z_matrix(angle: float) -> np.ndarray:
-    """Матрица поворота вокруг оси Z"""
     c = np.cos(angle)
     s = np.sin(angle)
     return np.array([
@@ -236,7 +231,6 @@ def rotation_z_matrix(angle: float) -> np.ndarray:
 
 
 def reflection_xy_matrix() -> np.ndarray:
-    """Отражение относительно плоскости XY"""
     return np.array([
         [1, 0, 0, 0],
         [0, 1, 0, 0],
@@ -246,7 +240,6 @@ def reflection_xy_matrix() -> np.ndarray:
 
 
 def reflection_xz_matrix() -> np.ndarray:
-    """Отражение относительно плоскости XZ"""
     return np.array([
         [1, 0, 0, 0],
         [0, -1, 0, 0],
@@ -256,7 +249,6 @@ def reflection_xz_matrix() -> np.ndarray:
 
 
 def reflection_yz_matrix() -> np.ndarray:
-    """Отражение относительно плоскости YZ"""
     return np.array([
         [-1, 0, 0, 0],
         [0, 1, 0, 0],
@@ -266,77 +258,212 @@ def reflection_yz_matrix() -> np.ndarray:
 
 
 def scale_relative_to_center(obj: Object, sx: float, sy: float, sz: float):
-    """Масштабирование относительно центра объекта"""
     center = obj.get_center()
-
-    # Перенос в начало координат
     t1 = translation_matrix(-center.x, -center.y, -center.z)
-    # Масштабирование
     s = scale_matrix(sx, sy, sz)
-    # Перенос обратно
     t2 = translation_matrix(center.x, center.y, center.z)
-
-    # Комбинированная матрица
     matrix = np.dot(t2, np.dot(s, t1))
     obj.apply_transformation(matrix)
 
 
 def rotate_around_center(obj: Object, axis: str, angle: float):
-    """Вращение вокруг центра объекта"""
     center = obj.get_center()
-
     t1 = translation_matrix(-center.x, -center.y, -center.z)
 
     if axis == 'X':
         r = rotation_x_matrix(angle)
     elif axis == 'Y':
         r = rotation_y_matrix(angle)
-    else:  # Z
+    else:
         r = rotation_z_matrix(angle)
 
     t2 = translation_matrix(center.x, center.y, center.z)
-
     matrix = np.dot(t2, np.dot(r, t1))
     obj.apply_transformation(matrix)
 
 
-def rotate_around_line(obj: Object, p1: Point, p2: Point, angle: float):
-    """Поворот вокруг произвольной прямой"""
-    # Вектор направления прямой
-    dx = p2.x - p1.x
-    dy = p2.y - p1.y
-    dz = p2.z - p1.z
+# ===== OBJ файлы =====
 
-    # Нормализация
-    length = np.sqrt(dx * dx + dy * dy + dz * dz)
-    if length < 1e-6:
-        return
+def save_obj(obj: Object, filename: str):
+    """Сохранение модели в формате Wavefront OBJ"""
+    with open(filename, 'w') as f:
+        f.write("# Wavefront OBJ file\n")
+        f.write("# Created by 3DRenderer\n\n")
 
-    dx /= length
-    dy /= length
-    dz /= length
+        # Собираем все уникальные вершины
+        vertices = []
+        vertex_map = {}
 
-    # Перенос точки p1 в начало координат
-    t1 = translation_matrix(-p1.x, -p1.y, -p1.z)
+        for poly in obj.polygons:
+            for v in poly.vertices:
+                key = (round(v.x, 6), round(v.y, 6), round(v.z, 6))
+                if key not in vertex_map:
+                    vertex_map[key] = len(vertices) + 1
+                    vertices.append(v)
 
-    # Поворот вокруг оси, заданной направляющим вектором (dx, dy, dz)
-    # Используем формулу Родрига
-    c = np.cos(angle)
-    s = np.sin(angle)
-    t = 1 - c
+        # Записываем вершины
+        for v in vertices:
+            f.write(f"v {v.x} {v.y} {v.z}\n")
 
-    rotation = np.array([
-        [t * dx * dx + c, t * dx * dy - s * dz, t * dx * dz + s * dy, 0],
-        [t * dx * dy + s * dz, t * dy * dy + c, t * dy * dz - s * dx, 0],
-        [t * dx * dz - s * dy, t * dy * dz + s * dx, t * dz * dz + c, 0],
-        [0, 0, 0, 1]
-    ])
+        f.write("\n")
 
-    # Перенос обратно
-    t2 = translation_matrix(p1.x, p1.y, p1.z)
+        # Записываем грани
+        for poly in obj.polygons:
+            face_indices = []
+            for v in poly.vertices:
+                key = (round(v.x, 6), round(v.y, 6), round(v.z, 6))
+                face_indices.append(str(vertex_map[key]))
+            f.write(f"f {' '.join(face_indices)}\n")
 
-    matrix = np.dot(t2, np.dot(rotation, t1))
-    obj.apply_transformation(matrix)
+    print(f"Модель сохранена в файл: {filename}")
+
+
+def load_obj(filename: str) -> Object:
+    """Загрузка модели из формата Wavefront OBJ"""
+    vertices = []
+    faces = []
+
+    try:
+        with open(filename, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+
+                parts = line.split()
+                if not parts:
+                    continue
+
+                if parts[0] == 'v':
+                    # Вершина
+                    x, y, z = float(parts[1]), float(parts[2]), float(parts[3])
+                    vertices.append(Point(x, y, z))
+
+                elif parts[0] == 'f':
+                    # Грань
+                    face_indices = []
+                    for i in range(1, len(parts)):
+                        # Формат может быть: v, v/vt, v/vt/vn, v//vn
+                        idx = parts[i].split('/')[0]
+                        face_indices.append(int(idx) - 1)  # OBJ индексы с 1
+                    faces.append(face_indices)
+
+        # Создаем объект
+        obj = Object()
+        for face in faces:
+            poly = Polygon([vertices[i] for i in face])
+            obj.add_face(poly)
+
+        print(f"Модель загружена из файла: {filename}")
+        print(f"Вершин: {len(vertices)}, Граней: {len(faces)}")
+        return obj
+
+    except Exception as e:
+        print(f"Ошибка загрузки файла: {e}")
+        return create_cube()  # Возвращаем куб по умолчанию
+
+
+# ===== Фигура вращения =====
+
+def create_rotation_figure(profile_points: List[Point], axis: str, divisions: int) -> Object:
+    """
+    Создание фигуры вращения
+    profile_points: точки образующей
+    axis: ось вращения ('X', 'Y' или 'Z')
+    divisions: количество разбиений
+    """
+    if len(profile_points) < 2:
+        return Object()
+
+    angle_step = 2 * np.pi / divisions
+    obj = Object()
+
+    # Создаем вершины для каждого угла поворота
+    rotated_profiles = []
+    for i in range(divisions):
+        angle = i * angle_step
+        rotated_profile = []
+
+        for p in profile_points:
+            # Создаем копию точки
+            new_point = Point(p.x, p.y, p.z)
+
+            # Применяем поворот вокруг выбранной оси
+            if axis == 'X':
+                matrix = rotation_x_matrix(angle)
+            elif axis == 'Y':
+                matrix = rotation_y_matrix(angle)
+            else:  # Z
+                matrix = rotation_z_matrix(angle)
+
+            h = new_point.to_homogeneous()
+            transformed = np.dot(matrix, h)
+            new_point.from_homogeneous(transformed)
+            rotated_profile.append(new_point)
+
+        rotated_profiles.append(rotated_profile)
+
+    # Создаем грани между соседними профилями
+    for i in range(divisions):
+        next_i = (i + 1) % divisions
+
+        for j in range(len(profile_points) - 1):
+            # Четырехугольная грань между двумя профилями
+            p1 = rotated_profiles[i][j]
+            p2 = rotated_profiles[next_i][j]
+            p3 = rotated_profiles[next_i][j + 1]
+            p4 = rotated_profiles[i][j + 1]
+
+            obj.add_face(Polygon([p1, p2, p3, p4]))
+
+    return obj
+
+
+# ===== График функции =====
+
+def create_surface(func, x_range: Tuple[float, float], y_range: Tuple[float, float],
+                   x_divisions: int, y_divisions: int) -> Object:
+    """
+    Создание поверхности по функции f(x, y) = z
+    func: функция двух переменных
+    x_range: (x0, x1)
+    y_range: (y0, y1)
+    x_divisions: количество разбиений по X
+    y_divisions: количество разбиений по Y
+    """
+    x0, x1 = x_range
+    y0, y1 = y_range
+
+    x_step = (x1 - x0) / x_divisions
+    y_step = (y1 - y0) / y_divisions
+
+    # Создаем сетку точек
+    points = []
+    for i in range(y_divisions + 1):
+        row = []
+        y = y0 + i * y_step
+        for j in range(x_divisions + 1):
+            x = x0 + j * x_step
+            try:
+                z = func(x, y)
+                row.append(Point(x, y, z))
+            except:
+                row.append(Point(x, y, 0))
+        points.append(row)
+
+    # Создаем грани
+    obj = Object()
+    for i in range(y_divisions):
+        for j in range(x_divisions):
+            # Четырехугольная грань
+            p1 = points[i][j]
+            p2 = points[i][j + 1]
+            p3 = points[i + 1][j + 1]
+            p4 = points[i + 1][j]
+
+            obj.add_face(Polygon([p1, p2, p3, p4]))
+
+    return obj
 
 
 # ===== Рендеринг =====
@@ -448,8 +575,7 @@ def create_octahedron() -> Object:
 
 
 def create_icosahedron() -> Object:
-    """Создание икосаэдра"""
-    phi = (1 + np.sqrt(5)) / 2  # Золотое сечение
+    phi = (1 + np.sqrt(5)) / 2
     a = 100
 
     vertices = [
@@ -473,7 +599,6 @@ def create_icosahedron() -> Object:
 
 
 def create_dodecahedron() -> Object:
-    """Создание додекаэдра"""
     phi = (1 + np.sqrt(5)) / 2
     a = 60
 
@@ -502,6 +627,52 @@ def create_dodecahedron() -> Object:
     return dodeca
 
 
+# Пример образующей для фигуры вращения
+def create_vase_profile() -> List[Point]:
+    """Создает образующую для вазы"""
+    profile = []
+    # Создаем профиль вазы
+    for i in range(11):
+        t = i / 10.0
+        y = t * 200 - 100
+
+        # Форма вазы (параболическая)
+        if t < 0.3:
+            x = 30 + t * 50
+        elif t < 0.7:
+            x = 45 - (t - 0.5) ** 2 * 100
+        else:
+            x = 30 + (1 - t) * 70
+
+        profile.append(Point(x, y, 0))
+
+    return profile
+
+
+# Примеры функций для графиков
+def func_sin_cos(x, y):
+    """z = sin(x) * cos(y)"""
+    return 50 * np.sin(x) * np.cos(y)
+
+
+def func_paraboloid(x, y):
+    """z = x^2 + y^2"""
+    return (x ** 2 + y ** 2) / 20
+
+
+def func_saddle(x, y):
+    """z = x^2 - y^2"""
+    return (x ** 2 - y ** 2) / 20
+
+
+def func_wave(x, y):
+    """z = sin(sqrt(x^2 + y^2))"""
+    r = np.sqrt(x ** 2 + y ** 2)
+    if r < 0.01:
+        return 50
+    return 50 * np.sin(r) / r
+
+
 # ===== Main =====
 
 class ObjectOption:
@@ -514,7 +685,7 @@ def task():
     pygame.init()
 
     screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
-    pygame.display.set_caption("3DRenderer")
+    pygame.display.set_caption("3DRenderer - Extended")
 
     window_info = get_window_info(screen)
 
@@ -523,7 +694,12 @@ def task():
         ObjectOption("Гексаэдр", create_cube),
         ObjectOption("Октаэдр", create_octahedron),
         ObjectOption("Икосаэдр", create_icosahedron),
-        ObjectOption("Додекаэдр", create_dodecahedron)
+        ObjectOption("Додекаэдр", create_dodecahedron),
+        ObjectOption("Ваза (врващ)", lambda: create_rotation_figure(create_vase_profile(), 'Y', 16)),
+        ObjectOption("sin*cos", lambda: create_surface(func_sin_cos, (-5, 5), (-5, 5), 20, 20)),
+        ObjectOption("Параболоид", lambda: create_surface(func_paraboloid, (-5, 5), (-5, 5), 20, 20)),
+        ObjectOption("Седло", lambda: create_surface(func_saddle, (-5, 5), (-5, 5), 20, 20)),
+        ObjectOption("Волна", lambda: create_surface(func_wave, (-10, 10), (-10, 10), 30, 30)),
     ]
 
     object_count = len(objects)
@@ -561,6 +737,12 @@ def task():
         Rectangle(1000, y_offset + 270, btn_width, btn_height),  # Отражение XZ
         Rectangle(1000, y_offset + 315, btn_width, btn_height),  # Отражение YZ
         Rectangle(1000, y_offset + 360, btn_width, btn_height),  # Сброс
+    ]
+
+    # Кнопки файловых операций
+    file_buttons = [
+        Rectangle(20, window_info.height - 150, 150, 35),  # Загрузить
+        Rectangle(20, window_info.height - 105, 150, 35),  # Сохранить
     ]
 
     running = True
@@ -681,6 +863,32 @@ def task():
         if button(screen, font, transform_buttons[8], "Сброс") and button_clicked:
             main_object = objects[current_object].create()
             rendered_object = render_object(main_object, renders[current_render], window_info)
+            button_clicked = False
+
+        # Кнопки файловых операций
+        if button(screen, font, file_buttons[0], "Загрузить OBJ") and button_clicked:
+            # Простой диалог ввода имени файла через консоль
+            print("\n=== ЗАГРУЗКА МОДЕЛИ ===")
+            print("Введите имя файла (например: model.obj):")
+            # В реальной программе здесь был бы GUI диалог
+            # Для демонстрации используем предустановленное имя
+            filename = "model.obj"
+            try:
+                main_object = load_obj(filename)
+                rendered_object = render_object(main_object, renders[current_render], window_info)
+            except:
+                print(f"Не удалось загрузить файл {filename}")
+            button_clicked = False
+
+        if button(screen, font, file_buttons[1], "Сохранить OBJ") and button_clicked:
+            print("\n=== СОХРАНЕНИЕ МОДЕЛИ ===")
+            print("Введите имя файла (например: output.obj):")
+            # В реальной программе здесь был бы GUI диалог
+            filename = f"saved_model_{current_object}.obj"
+            try:
+                save_obj(main_object, filename)
+            except Exception as e:
+                print(f"Ошибка сохранения: {e}")
             button_clicked = False
 
         pygame.display.flip()
