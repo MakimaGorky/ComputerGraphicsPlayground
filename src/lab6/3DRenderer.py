@@ -511,7 +511,7 @@ def create_icosahedron() -> Object:
 def create_dodecahedron() -> Object:
     # Создаем додекаэдр как двойственный икосаэдру
     # icosa = create_icosahedron()
-    phi =  1 + np.sqrt(5) / 2;
+    phi = (1 + np.sqrt(5)) / 2;
     a = 100
 
     vert = [
