@@ -8,6 +8,7 @@ from camera import *
 import os
 import math
 from plot import Plot
+from rotation_shape import * # <-- НОВЫЙ ИМПОРТ
 
 FULLSCREEN = False
 
@@ -73,7 +74,7 @@ def app():
         "custom_line_p2": "100,100,100",
         "custom_rotation_angle": "30",
         "filename": "model",
-        # ===== НОВЫЕ ПОЛЯ ДЛЯ ГРАФИКА =====
+        # ===== ПОЛЯ ДЛЯ ГРАФИКА =====
         "plot_function": "math.sin(x/50) * math.cos(y/50) * 100",
         "plot_x_min": "-200",
         "plot_x_max": "200",
@@ -81,6 +82,10 @@ def app():
         "plot_y_max": "200",
         "plot_n_points": "40",
         # ====================================
+        # ===== НОВЫЕ ПОЛЯ ДЛЯ ФИГУРЫ ВРАЩЕНИЯ =====
+        "rot_shape_profile": "(50, 0) (80, 50) (80, 100) (50, 150)", # Пример профиля
+        "rot_shape_iterations": "16",
+        # ============================================
     }
 
     active_input = None
@@ -88,6 +93,15 @@ def app():
     # Кнопки управления
     y_offset = 80
     btn_width, btn_height = 200, 35
+    
+    # Смещение для нового раздела UI (График + Фигура вращения)
+    # Используем область слева (x=20)
+
+    # Высота блока построения графика
+    plot_block_height = 40 + 35 * 4 + 40 # Заголовок, 4 строки инпутов, кнопка
+    
+    # Начальная Y-координата для блока фигуры вращения, чтобы разместить его под графиком
+    rot_shape_y_offset = y_offset + plot_block_height + 140
 
     transform_buttons = [
         Rectangle(1140, y_offset, btn_width, btn_height),  # Перенос
@@ -115,14 +129,18 @@ def app():
         "custom_line_p2": Rectangle(800, y_offset + 395, 170, 30),
         "custom_rotation_angle": Rectangle(800, y_offset + 430, 170, 30),
         "filename": Rectangle(20, window_info.height - 185, 150, 35),
-        # ===== НОВЫЕ ПРЯМОУГОЛЬНИКИ ДЛЯ ПОЛЕЙ ГРАФИКА =====
-        "plot_function": Rectangle(20, y_offset + 100, 430, 35),
+        # ===== ПРЯМОУГОЛЬНИКИ ДЛЯ ПОЛЕЙ ГРАФИКА =====
+        "plot_function": Rectangle(100, y_offset + 100, 350, 35),
         "plot_x_min": Rectangle(110, y_offset + 145, 80, 35),
         "plot_x_max": Rectangle(200, y_offset + 145, 80, 35),
         "plot_y_min": Rectangle(110, y_offset + 190, 80, 35),
         "plot_y_max": Rectangle(200, y_offset + 190, 80, 35),
         "plot_n_points": Rectangle(170, y_offset + 235, 110, 35),
         # ======================================================
+        # ===== НОВЫЕ ПРЯМОУГОЛЬНИКИ ДЛЯ ФИГУРЫ ВРАЩЕНИЯ =====
+        "rot_shape_profile": Rectangle(20, rot_shape_y_offset + 40, 430, 35), # Большая строка для профиля
+        "rot_shape_iterations": Rectangle(150, rot_shape_y_offset + 85, 80, 35),
+        # ====================================================
     }
 
     # Кнопки файловых операций
@@ -131,9 +149,14 @@ def app():
         Rectangle(20, window_info.height - 105, 150, 35),  # Сохранить
     ]
 
-    # ===== НОВАЯ КНОПКА ДЛЯ ПОСТРОЕНИЯ ГРАФИКА =====
+    # ===== КНОПКА ДЛЯ ПОСТРОЕНИЯ ГРАФИКА =====
     plot_button = Rectangle(20, y_offset + 280, 430, 40)
     # ===============================================
+
+    # ===== НОВАЯ КНОПКА ДЛЯ ФИГУРЫ ВРАЩЕНИЯ =====
+    rot_shape_button = Rectangle(20, rot_shape_y_offset + 130, 430, 40)
+    # ============================================
+
 
     running = True
     clock = pygame.time.Clock()
@@ -230,7 +253,7 @@ def app():
         center_text = small_font.render(f"Центр: {center}", True, (0, 0, 0))
         screen.blit(center_text, (20, 70))
 
-        # ===== ОТРИСОВКА НОВОГО UI ДЛЯ ГРАФИКА =====
+        # --- РАЗДЕЛ ПОСТРОЕНИЯ ГРАФИКА ---
         # Заголовок
         plot_title_text = font.render("Построение графика z = f(x, y)", True, (0, 0, 0))
         screen.blit(plot_title_text, (20, y_offset + 70))
@@ -241,7 +264,7 @@ def app():
         screen.blit(small_font.render("Y min, max:", True, (0, 0, 0)), (20, y_offset + 197))
         screen.blit(small_font.render("Кол-во точек:", True, (0, 0, 0)), (20, y_offset + 242))
 
-        # Кнопка построения
+        # Кнопка построения графика
         if button(screen, font, plot_button, "Построить график") and button_clicked:
             try:
                 # 1. Собираем параметры из полей ввода
@@ -253,7 +276,6 @@ def app():
                 n_points = int(input_boxes["plot_n_points"])
 
                 # 2. Создаем lambda-функцию из строки. Используем eval (осторожно!)
-                # Передаем 'math' в контекст, чтобы можно было использовать sin, cos и т.д.
                 func = lambda x, y: eval(func_str, {"x": x, "y": y, "math": math})
 
                 # 3. Создаем объект Plot
@@ -274,7 +296,39 @@ def app():
             except Exception as e:
                 print(f"Ошибка при построении графика: {e}")
             button_clicked = False
-        # ====================================================
+        # --------------------------------------------------
+
+        # --- РАЗДЕЛ ПОСТРОЕНИЯ ФИГУРЫ ВРАЩЕНИЯ ---
+        # Заголовок
+        rot_shape_title_text = font.render("Построение фигуры вращения", True, (0, 0, 0))
+        screen.blit(rot_shape_title_text, (20, rot_shape_y_offset))
+        
+        # Подписи к полям
+        screen.blit(small_font.render("Профиль (x, y) - список точек:", True, (0, 0, 0)), (20, rot_shape_y_offset + 15))
+        screen.blit(small_font.render("Итерации/Сегменты:", True, (0, 0, 0)), (20, rot_shape_y_offset + 92))
+
+        # Кнопка построения фигуры вращения
+        if button(screen, font, rot_shape_button, "Построить фигуру вращения") and button_clicked:
+            try:
+                # 1. Собираем параметры из полей ввода
+                profile_str = input_boxes["rot_shape_profile"]
+                iterations = int(input_boxes["rot_shape_iterations"])
+
+                # 2. Парсим точки профиля
+                dots = get_dots_from_string(profile_str)
+
+                # 3. Создаем объект фигуры вращения
+                rot_shape_object = create_solid_of_revolution(dots, iterations)
+
+                # 4. Устанавливаем его как основной объект
+                main_object = rot_shape_object
+                rendered_object = render_object(main_object, renders[current_render], window_info)
+
+            except Exception as e:
+                print(f"Ошибка при построении фигуры вращения: {e}")
+            button_clicked = False
+        # ----------------------------------------------------
+
 
         # Поля ввода и кнопки преобразований
 
