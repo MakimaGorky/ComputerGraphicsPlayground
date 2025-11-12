@@ -192,7 +192,7 @@ def create_icosahedron() -> Object:
     return icosa
 
 def create_dodecahedron() -> Object:
-    phi =  1 + np.sqrt(5) / 2;
+    phi =  (1 + np.sqrt(5)) / 2;
     a = 100
 
     vert = [
