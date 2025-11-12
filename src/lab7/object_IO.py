@@ -27,7 +27,7 @@ def load_obj(filename: str) -> Object:
                     # .obj файлы могут содержать 4-й компонент (w), мы его игнорируем
                     x, y, z = map(float, parts[1:4])
                     # Масштабируем вершину при загрузке
-                    vertices.append(Point(x * scale, y * scale, z * scale))
+                    vertices.append(Point(x * scale, -y * scale, z * scale))
                 elif line.startswith('f '):
                     # Парсинг индексов вершин для полигона (грани)
                     parts = line.strip().split()[1:]
@@ -79,7 +79,7 @@ def save_obj(obj: Object, filename: str):
 
     for vertex in all_vertices:
         # Округляем значения для корректного сравнения float-чисел
-        v_tuple = (round(vertex.x, 6), round(vertex.y, 6), round(vertex.z, 6))
+        v_tuple = (round(vertex.x, 6), -round(vertex.y, 6), round(vertex.z, 6))
         if v_tuple not in vertex_to_index:
             unique_vertices.append(vertex)
             # .obj использует 1-основанную индексацию
@@ -100,7 +100,7 @@ def save_obj(obj: Object, filename: str):
             for poly in obj.polygons:
                 f.write("f")
                 for vertex in poly.vertices:
-                    v_tuple = (round(vertex.x, 6), round(vertex.y, 6), round(vertex.z, 6))
+                    v_tuple = (round(vertex.x.item(), 6), round(vertex.y.item(), 6), round(vertex.z.item(), 6))
                     index = vertex_to_index[v_tuple]
                     f.write(f" {index}")
                 f.write("\n")
