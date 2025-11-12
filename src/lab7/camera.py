@@ -23,13 +23,13 @@ class Camera:
                 self.z -= self.dz
         else:
             if keys[pygame.K_RIGHT]:
-                self.x += self.dx
-            if keys[pygame.K_LEFT]:
                 self.x -= self.dx
+            if keys[pygame.K_LEFT]:
+                self.x += self.dx
             if keys[pygame.K_UP]:
-                self.y -= self.dy
-            if keys[pygame.K_DOWN]:
                 self.y += self.dy
+            if keys[pygame.K_DOWN]:
+                self.y -= self.dy
             
 
 camera = Camera(800, 800, -1000)
