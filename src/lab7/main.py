@@ -6,18 +6,23 @@ from object_IO import *
 from D3Renderer import *
 from camera import *
 import os
+import math
+from plot import Plot
 
 FULLSCREEN = False
 
 def app():
     current_file_path = os.path.abspath(__file__)
     current_dir = os.path.dirname(current_file_path)
-    root_dir = os.path.abspath(os.path.join(current_dir, os.pardir, os.pardir))
-    models_dir = os.path.join(root_dir, 'models')
+    # Исправляем путь к папке models, чтобы он был более надежным
+    models_dir = os.path.join(current_dir, 'models')
+    if not os.path.exists(models_dir):
+        os.makedirs(models_dir)
+
 
     pygame.init()
 
-    screen = pygame.display.set_mode((0, 0))
+    screen = pygame.display.set_mode((1400, 900)) # Рекомендую задать фиксированный размер для удобства верстки UI
     if FULLSCREEN:
         screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
 
@@ -67,7 +72,15 @@ def app():
         "custom_line_p1": "0,0,0",
         "custom_line_p2": "100,100,100",
         "custom_rotation_angle": "30",
-        "filename": "model"
+        "filename": "model",
+        # ===== НОВЫЕ ПОЛЯ ДЛЯ ГРАФИКА =====
+        "plot_function": "math.sin(x/50) * math.cos(y/50) * 100",
+        "plot_x_min": "-200",
+        "plot_x_max": "200",
+        "plot_y_min": "-200",
+        "plot_y_max": "200",
+        "plot_n_points": "40",
+        # ====================================
     }
 
     active_input = None
@@ -101,7 +114,15 @@ def app():
         "custom_line_p1": Rectangle(800, y_offset + 360, 170, 30),
         "custom_line_p2": Rectangle(800, y_offset + 395, 170, 30),
         "custom_rotation_angle": Rectangle(800, y_offset + 430, 170, 30),
-        "filename": Rectangle(20, window_info.height - 185, 150, 35)
+        "filename": Rectangle(20, window_info.height - 185, 150, 35),
+        # ===== НОВЫЕ ПРЯМОУГОЛЬНИКИ ДЛЯ ПОЛЕЙ ГРАФИКА =====
+        "plot_function": Rectangle(20, y_offset + 100, 430, 35),
+        "plot_x_min": Rectangle(110, y_offset + 145, 80, 35),
+        "plot_x_max": Rectangle(200, y_offset + 145, 80, 35),
+        "plot_y_min": Rectangle(110, y_offset + 190, 80, 35),
+        "plot_y_max": Rectangle(200, y_offset + 190, 80, 35),
+        "plot_n_points": Rectangle(170, y_offset + 235, 110, 35),
+        # ======================================================
     }
 
     # Кнопки файловых операций
@@ -109,6 +130,10 @@ def app():
         Rectangle(20, window_info.height - 150, 150, 35),  # Загрузить
         Rectangle(20, window_info.height - 105, 150, 35),  # Сохранить
     ]
+
+    # ===== НОВАЯ КНОПКА ДЛЯ ПОСТРОЕНИЯ ГРАФИКА =====
+    plot_button = Rectangle(20, y_offset + 280, 430, 40)
+    # ===============================================
 
     running = True
     clock = pygame.time.Clock()
@@ -127,9 +152,7 @@ def app():
                     if event.key == pygame.K_BACKSPACE:
                         input_boxes[active_input] = input_boxes[active_input][:-1]
                     else:
-                        # Проверяем, что вводим только цифры, запятые, точки и минусы
-                        if True:
-                            input_boxes[active_input] += event.unicode
+                        input_boxes[active_input] += event.unicode
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:
                     button_clicked = True
@@ -206,6 +229,52 @@ def app():
         center = main_object.get_center()
         center_text = small_font.render(f"Центр: {center}", True, (0, 0, 0))
         screen.blit(center_text, (20, 70))
+
+        # ===== ОТРИСОВКА НОВОГО UI ДЛЯ ГРАФИКА =====
+        # Заголовок
+        plot_title_text = font.render("Построение графика z = f(x, y)", True, (0, 0, 0))
+        screen.blit(plot_title_text, (20, y_offset + 70))
+
+        # Подписи к полям
+        screen.blit(small_font.render("f(x, y) =", True, (0, 0, 0)), (20, y_offset + 110))
+        screen.blit(small_font.render("X min, max:", True, (0, 0, 0)), (20, y_offset + 152))
+        screen.blit(small_font.render("Y min, max:", True, (0, 0, 0)), (20, y_offset + 197))
+        screen.blit(small_font.render("Кол-во точек:", True, (0, 0, 0)), (20, y_offset + 242))
+
+        # Кнопка построения
+        if button(screen, font, plot_button, "Построить график") and button_clicked:
+            try:
+                # 1. Собираем параметры из полей ввода
+                func_str = input_boxes["plot_function"]
+                x_min = float(input_boxes["plot_x_min"])
+                x_max = float(input_boxes["plot_x_max"])
+                y_min = float(input_boxes["plot_y_min"])
+                y_max = float(input_boxes["plot_y_max"])
+                n_points = int(input_boxes["plot_n_points"])
+
+                # 2. Создаем lambda-функцию из строки. Используем eval (осторожно!)
+                # Передаем 'math' в контекст, чтобы можно было использовать sin, cos и т.д.
+                func = lambda x, y: eval(func_str, {"x": x, "y": y, "math": math})
+
+                # 3. Создаем объект Plot
+                plot_obj = Plot(
+                    f=func,
+                    cut_off=((x_min, x_max), (y_min, y_max)),
+                    number_of_points=n_points
+                )
+
+                # 4. Экспортируем во временный файл
+                temp_plot_filename = os.path.join(models_dir, "_temp_plot.obj")
+                plot_obj.export(temp_plot_filename)
+
+                # 5. Загружаем этот файл как основной объект
+                main_object = load_obj(temp_plot_filename)
+                rendered_object = render_object(main_object, renders[current_render], window_info)
+
+            except Exception as e:
+                print(f"Ошибка при построении графика: {e}")
+            button_clicked = False
+        # ====================================================
 
         # Поля ввода и кнопки преобразований
 
@@ -311,26 +380,19 @@ def app():
             rendered_object = render_object(main_object, renders[current_render], window_info)
             button_clicked = False
 
-                # Кнопки файловых операций
+        # Кнопки файловых операций
         if button(screen, font, file_buttons[0], "Загрузить OBJ") and button_clicked:
-            # Простой диалог ввода имени файла через консоль
-            print("\n=== ЗАГРУЗКА МОДЕЛИ ===")
-            print("Введите имя Object файла (например: model):")
-            # В реальной программе здесь был бы GUI диалог
-            # Для демонстрации используем предустановленное имя
             filename = input_boxes["filename"] + '.obj'
             file_path = os.path.join(models_dir, filename)
             try:
                 main_object = load_obj(file_path)
                 rendered_object = render_object(main_object, renders[current_render], window_info)
+                print(f"Файл {filename} загружен.")
             except:
                 print(f"Не удалось загрузить файл {filename}")
             button_clicked = False
 
         if button(screen, font, file_buttons[1], "Сохранить OBJ") and button_clicked:
-            print("\n=== СОХРАНЕНИЕ МОДЕЛИ ===")
-            print("Введите имя Object файла (например: output):")
-            # В реальной программе здесь был бы GUI диалог
             filename = f"saved_model_{datetime.now().strftime('%H_%M_%S')}.obj"
             file_path = os.path.join(models_dir, filename)
             try:

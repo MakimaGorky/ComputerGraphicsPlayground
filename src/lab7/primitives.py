@@ -83,20 +83,35 @@ class Object:
 
     def get_center(self) -> Point:
         all_vertices = []
+        # Используем set для автоматического удаления дубликатов ссылок на объекты Point
+        unique_vertices = set()
         for poly in self.polygons:
-            all_vertices.extend(poly.vertices)
-
-        if not all_vertices:
+            for vertex in poly.vertices:
+                unique_vertices.add(vertex)
+            
+        if not unique_vertices:
             return Point(0, 0, 0)
 
+        # Преобразуем set обратно в list для вычислений
+        all_vertices = list(unique_vertices)
         cx = sum(v.x for v in all_vertices) / len(all_vertices)
         cy = sum(v.y for v in all_vertices) / len(all_vertices)
         cz = sum(v.z for v in all_vertices) / len(all_vertices)
         return Point(cx, cy, cz)
 
     def apply_transformation(self, matrix: np.ndarray):
+        # 1. Собрать все уникальные вершины со всех полигонов
+        unique_vertices = set()
         for poly in self.polygons:
-            poly.apply_transformation(matrix)
+            for vertex in poly.vertices:
+                unique_vertices.add(vertex)
+
+        # 2. Применить трансформацию к каждой уникальной вершине один раз
+        for vertex in unique_vertices:
+            h = vertex.to_homogeneous()
+            transformed = np.dot(matrix, h)
+            vertex.from_homogeneous(transformed)
+
 
     def __len__(self):
         return len(self.polygons)
