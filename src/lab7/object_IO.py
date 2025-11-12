@@ -100,7 +100,7 @@ def save_obj(obj: Object, filename: str):
             for poly in obj.polygons:
                 f.write("f")
                 for vertex in poly.vertices:
-                    v_tuple = (round(vertex.x.item(), 6), round(vertex.y.item(), 6), round(vertex.z.item(), 6))
+                    v_tuple = (round(vertex.x, 6), round(-vertex.y, 6), round(vertex.z, 6))
                     index = vertex_to_index[v_tuple]
                     f.write(f" {index}")
                 f.write("\n")
