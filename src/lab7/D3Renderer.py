@@ -5,10 +5,11 @@ import config
 from transformations import *
 from primitives import *
 from UI import *
+from camera import *
 
 
-PIVOT = (800, 800)  # hold my 🍺
-Z_PIVOT = -1000  # hold my 🍺
+# PIVOT = (800, 800)  # hold my 🍺
+# Z_PIVOT = -1000  # hold my 🍺
 WIDTH = 0
 HEIGHT = 0
 
@@ -25,22 +26,22 @@ class PolygonProjection:
     def draw(self, screen):
         if len(self.vertices) == 1:
             pygame.draw.circle(screen, self.color,
-                               (int(self.vertices[0][0] + PIVOT[0]), int(self.vertices[0][1] + PIVOT[1])),
+                               (int(self.vertices[0][0] + camera.x), int(self.vertices[0][1] + camera.y)),
                                config.POINT_RADIUS)
         elif len(self.vertices) == 2:
             pygame.draw.line(screen, self.color,
-                             (int(self.vertices[0][0] + PIVOT[0]), int(self.vertices[0][1] + PIVOT[1])),
-                             (int(self.vertices[1][0] + PIVOT[0]), int(self.vertices[1][1] + PIVOT[1])),
+                             (int(self.vertices[0][0] + camera.x), int(self.vertices[0][1] + camera.y)),
+                             (int(self.vertices[1][0] + camera.x), int(self.vertices[1][1] + camera.y)),
                              config.LINE_WIDTH)
         else:
-            int_vertices = [(int(v[0] + PIVOT[0]), int(v[1] + PIVOT[1])) for v in self.vertices]
+            int_vertices = [(int(v[0] + camera.x), int(v[1] + camera.y)) for v in self.vertices]
             pygame.draw.polygon(screen, self.color, int_vertices, config.LINE_WIDTH)
             for v in int_vertices:
                 pygame.draw.circle(screen, config.RED, v, config.VERTEX_RADIUS)
 
 
 def render_point(vertex: Point, method: str, window: WindowInfo):
-    vertex_h = np.array([vertex.x, vertex.y, vertex.z + Z_PIVOT, 1])
+    vertex_h = np.array([vertex.x, vertex.y, vertex.z + camera.z, 1])
 
     if method == "Аксонометрическая":
         a = np.radians(config.ANGLE)
