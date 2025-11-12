@@ -26,3 +26,4 @@ NEAR = 0.5
 
 # Параметры obj
 OBJ_SCALE = 300.0
+OBJ_TARGET_SIZE = 300.0

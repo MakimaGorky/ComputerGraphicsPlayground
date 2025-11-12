@@ -4,7 +4,11 @@
 """
 
 from D3Renderer import *
-import numpy as np
+from primitives import *
+from transformations import *
+from object_IO import *
+from rotation_figure import *
+from surface_2d import *
 
 
 def create_test_models():
