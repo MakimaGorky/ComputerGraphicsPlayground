@@ -4,7 +4,6 @@ from create_test_models import *
 from datetime import datetime
 from object_IO import *
 from D3Renderer import *
-from camera import *
 import os
 import math
 from plot import Plot
@@ -163,11 +162,9 @@ def app():
                             rect.y <= event.pos[1] <= rect.y + rect.height):
                             active_input = key
                             break
-        camera.update()
 
         screen.fill(ui_background_color)
-        
-        rendered_object = render_object(main_object, renders[current_render], window_info)
+
         if rendered_object:
             for rp in rendered_object:
                 rp.draw(screen)
