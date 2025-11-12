@@ -328,7 +328,7 @@ def app():
             print("\n=== СОХРАНЕНИЕ МОДЕЛИ ===")
             print("Введите имя Object файла (например: output):")
             # В реальной программе здесь был бы GUI диалог
-            filename = f"saved_model_{datetime.now().strftime('%H:%M:%S')}.obj"
+            filename = f"saved_model_{datetime.now().strftime('%H_%M_%S')}.obj"
             file_path = os.path.join(models_dir, filename)
             try:
                 save_obj(main_object, file_path)

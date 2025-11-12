@@ -61,6 +61,12 @@ def save_obj(obj: Object, filename: str):
         obj: Объект типа Object для сохранения.
         filename: Имя файла для сохранения.
     """
+    # Получаем коэффициент масштабирования из конфига для выполнения обратного преобразования
+    scale = config.OBJ_SCALE
+    # Предотвращение деления на ноль, если масштаб вдруг окажется нулевым
+    if scale == 0:
+        scale = 1.0
+
     all_vertices = []
     # Собираем все вершины из всех полигонов объекта
     for poly in obj.polygons:
@@ -83,9 +89,10 @@ def save_obj(obj: Object, filename: str):
         with open(filename, 'w') as f:
             f.write("# Model saved from 3DRenderer\n")
 
-            # Записываем все уникальные вершины
+            # Записываем все уникальные вершины с применением АНТИ-масштабирования
             for v in unique_vertices:
-                f.write(f"v {v.x} {v.y} {v.z}\n")
+                # Делим координаты на тот же коэффициент, на который умножали при загрузке
+                f.write(f"v {v.x / scale} {v.y / scale} {v.z / scale}\n")
 
             f.write("\n")
 
