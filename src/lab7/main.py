@@ -8,7 +8,7 @@ from camera import *
 import os
 import math
 from plot import Plot
-from rotation_shape import * # <-- НОВЫЙ ИМПОРТ
+from rotation_shape import *
 
 FULLSCREEN = False
 

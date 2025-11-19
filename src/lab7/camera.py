@@ -27,10 +27,10 @@ class Camera:
                 self.angle_x -= self.d_angle
             if keys[pygame.K_DOWN]:
                 self.angle_x += self.d_angle        
-            # if keys[pygame.K_q]: # <--- Поворот против часовой стрелки
-            #     self.angle_z -= self.d_angle
-            # if keys[pygame.K_e]: # <--- Поворот по часовой стрелке
-            #     self.angle_z += self.d_angle
+            if keys[pygame.K_q]:
+                self.angle_z -= self.d_angle
+            if keys[pygame.K_e]:
+                self.angle_z += self.d_angle
         elif keys[pygame.K_LSHIFT]:
             if keys[pygame.K_RIGHT]:
                 self.x += self.dx
