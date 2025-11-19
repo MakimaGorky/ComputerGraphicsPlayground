@@ -75,11 +75,11 @@ def app():
         "custom_rotation_angle": "30",
         "filename": "model",
         # ===== ПОЛЯ ДЛЯ ГРАФИКА =====
-        "plot_function": "math.sin(x/50) * math.cos(y/50) * 100",
-        "plot_x_min": "-200",
-        "plot_x_max": "200",
-        "plot_y_min": "-200",
-        "plot_y_max": "200",
+        "plot_function": "math.sin(x) * math.cos(y) * 2",
+        "plot_x_min": "-6",
+        "plot_x_max": "6",
+        "plot_y_min": "-6",
+        "plot_y_max": "6",
         "plot_n_points": "40",
         # ====================================
         # ===== НОВЫЕ ПОЛЯ ДЛЯ ФИГУРЫ ВРАЩЕНИЯ =====
@@ -93,13 +93,13 @@ def app():
     # Кнопки управления
     y_offset = 80
     btn_width, btn_height = 200, 35
-    
+
     # Смещение для нового раздела UI (График + Фигура вращения)
     # Используем область слева (x=20)
 
     # Высота блока построения графика
     plot_block_height = 40 + 35 * 4 + 40 # Заголовок, 4 строки инпутов, кнопка
-    
+
     # Начальная Y-координата для блока фигуры вращения, чтобы разместить его под графиком
     rot_shape_y_offset = y_offset + plot_block_height + 140
 
@@ -189,7 +189,7 @@ def app():
         camera.update()
 
         screen.fill(ui_background_color)
-        
+
         rendered_object = render_object(main_object, renders[current_render], window_info)
         if rendered_object:
             for rp in rendered_object:
@@ -302,7 +302,7 @@ def app():
         # Заголовок
         rot_shape_title_text = font.render("Построение фигуры вращения", True, (0, 0, 0))
         screen.blit(rot_shape_title_text, (20, rot_shape_y_offset))
-        
+
         # Подписи к полям
         screen.blit(small_font.render("Профиль (x, y) - список точек:", True, (0, 0, 0)), (20, rot_shape_y_offset + 15))
         screen.blit(small_font.render("Итерации/Сегменты:", True, (0, 0, 0)), (20, rot_shape_y_offset + 92))
