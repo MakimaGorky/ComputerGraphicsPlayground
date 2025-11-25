@@ -52,4 +52,4 @@ class Camera:
                 self.y -= self.dy
 
 
-camera = Camera(100, 200, -1000)
+camera = Camera(0, 0, -1000)

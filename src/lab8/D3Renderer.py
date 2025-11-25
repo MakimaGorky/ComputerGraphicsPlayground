@@ -49,7 +49,7 @@ class PolygonProjection:
         if len(self.vertices) < 3:
             return
 
-        int_vertices = [(int(v[0] + camera.x), int(v[1] + camera.y)) for v in self.vertices]
+        int_vertices = [(int(v[0]), int(v[1])) for v in self.vertices]
 
         # Рисуем заливку граней
         if show_faces:
@@ -63,8 +63,8 @@ class PolygonProjection:
     def draw_normal(self, screen, color: Tuple[int, int, int] = (255, 0, 0)):
         """Рисует вектор нормали полигона"""
         if self.center_2d and self.normal_end_2d:
-            start_pos = (int(self.center_2d[0] + camera.x), int(self.center_2d[1] + camera.y))
-            end_pos = (int(self.normal_end_2d[0] + camera.x), int(self.normal_end_2d[1] + camera.y))
+            start_pos = (int(self.center_2d[0]), int(self.center_2d[1]))
+            end_pos = (int(self.normal_end_2d[0]), int(self.normal_end_2d[1]))
 
             # Рисуем линию нормали
             pygame.draw.line(screen, color, start_pos, end_pos, 2)
@@ -120,16 +120,16 @@ def render_point(vertex: Point, method: str, window: WindowInfo):
             [0, 0, 0, 0],
             [0, 0, 0, 1]
         ])
-        depth = vertex.z # + camera.z  # Глубина для аксонометрии
+        depth = transformed_vertex_h[2] # Глубина для аксонометрии
     else:  # Перспективная
         c = config.V_POINT
         projection_matrix = np.array([
             [1, 0, 0, 0],
             [0, 1, 0, 0],
-            [0, 0, 0, 0],
+            [0, 0, 1, 0],
             [0, 0, -1 / c,  1]
         ])
-        depth = vertex.z # + camera.z  # Используем Z координату как глубину
+        depth = transformed_vertex_h[2] # Используем Z координату как глубину
 
     projected_vertex = np.dot(projection_matrix, transformed_vertex_h)
 
@@ -139,7 +139,9 @@ def render_point(vertex: Point, method: str, window: WindowInfo):
         # print('lol')
         x_normalized = projected_vertex[0] / projected_vertex[3]
         y_normalized = projected_vertex[1] / projected_vertex[3]
-        return (x_normalized, y_normalized, depth)
+        screen_x = x_normalized + window.center.x
+        screen_y = y_normalized + window.center.y
+        return (screen_x, screen_y, depth)
 
     return None
 
@@ -211,20 +213,13 @@ def render_object(obj: Object, method: str, window: WindowInfo, use_zbuffer: boo
         normal_vec = np.array([p.normal.x, p.normal.y, p.normal.z, 0])
         normal_view = np.dot(view_matrix, normal_vec)
 
-        # В. Проверка видимости
-        # В пространстве камеры:
-        # Камера находится в (0,0,0).
-        # Вектор взгляда = Вектор от центра полигона (center_view) к камере (0,0,0).
-        # ViewVector = (0,0,0) - center_view = -center_view
+        view_vector = center_view[0:3]
 
-        # Скалярное произведение: Normal_view * ViewVector
-        # Если dot > 0, грань видима.
+        len_v = np.linalg.norm(view_vector)
+        if len_v != 0:
+            view_vector /= len_v
 
-        # dot = Nx*(-Cx) + Ny*(-Cy) + Nz*(-Cz)
-        # Это равносильно: dot = -(Nx*Cx + Ny*Cy + Nz*Cz)
-
-        # Для удобства используем только 3 компоненты [0:3]
-        dot_product = np.dot(normal_view[0:3], -center_view[0:3])
+        dot_product = np.dot(normal_view[0:3], view_vector)
 
         if dot_product > 0:
             rendered_poly = render_polygon(p, method, window)

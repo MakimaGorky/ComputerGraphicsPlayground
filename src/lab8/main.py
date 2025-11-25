@@ -7,7 +7,7 @@ from typing import List, Tuple, Any
 
 # Импорты модулей проекта
 from primitives import *
-from create_test_models import *
+# from create_test_models import *
 from object_IO import *
 from D3Renderer import *
 from camera import *
@@ -20,6 +20,8 @@ from rotation_shape import *
 # ==========================================
 WINDOW_WIDTH = 1540
 WINDOW_HEIGHT = 900
+HALF_WIDTH = WINDOW_WIDTH // 2
+HALF_HEIGHT = WINDOW_HEIGHT // 2
 SIDEBAR_WIDTH = 360  # Чуть шире для удобства
 VIEWPORT_START_X = SIDEBAR_WIDTH
 VIEWPORT_WIDTH = WINDOW_WIDTH - SIDEBAR_WIDTH
@@ -118,8 +120,8 @@ def app():
 
     # --- Настройка камеры ---
     # Важно: устанавливаем камеру в центр области просмотра (viewport)
-    camera.x = VIEWPORT_START_X + VIEWPORT_WIDTH / 2
-    camera.y = WINDOW_HEIGHT / 2
+    camera.x = 0
+    camera.y = 0
     camera.z = -1000 # Начальный Z
 
     # WindowInfo нужен рендереру (хотя D3Renderer больше полагается на camera.x/y)
