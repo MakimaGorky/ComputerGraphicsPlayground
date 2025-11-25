@@ -122,7 +122,7 @@ def app():
     # Важно: устанавливаем камеру в центр области просмотра (viewport)
     camera.x = 0
     camera.y = 0
-    camera.z = -1000 # Начальный Z
+    camera.z = -800 # Начальный Z
 
     # WindowInfo нужен рендереру (хотя D3Renderer больше полагается на camera.x/y)
     window_info = get_window_info(screen)

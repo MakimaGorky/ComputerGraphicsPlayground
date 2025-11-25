@@ -115,8 +115,8 @@ def render_point(vertex: Point, method: str, window: WindowInfo):
     if method == "Аксонометрическая":
         a = np.radians(config.ANGLE)
         projection_matrix = np.array([
-            [1, 0, 0.5 * np.cos(a), 0],
-            [0, 1, 0.5 * np.cos(a), 0],
+            [1, 0, 0, 0],
+            [0, 1, 0, 0],
             [0, 0, 0, 0],
             [0, 0, 0, 1]
         ])
@@ -124,10 +124,10 @@ def render_point(vertex: Point, method: str, window: WindowInfo):
     else:  # Перспективная
         c = config.V_POINT
         projection_matrix = np.array([
-            [1, 0, 0, 0],
-            [0, 1, 0, 0],
+            [c, 0, 0, 0],
+            [0, c, 0, 0],
             [0, 0, 1, 0],
-            [0, 0, -1 / c,  1]
+            [0, 0, 1, 0]
         ])
         depth = transformed_vertex_h[2] # Используем Z координату как глубину
 
@@ -201,8 +201,6 @@ def render_object(obj: Object, method: str, window: WindowInfo, use_zbuffer: boo
         if p.normal is None:
             continue
 
-        # === НОВАЯ ЛОГИКА ОТСЕЧЕНИЯ (CULLING) ===
-
         # А. Переводим ЦЕНТР полигона в пространство камеры (View Space)
         poly_center = p.get_center()
         center_vec = np.array([poly_center.x, poly_center.y, poly_center.z, 1])
@@ -213,20 +211,33 @@ def render_object(obj: Object, method: str, window: WindowInfo, use_zbuffer: boo
         normal_vec = np.array([p.normal.x, p.normal.y, p.normal.z, 0])
         normal_view = np.dot(view_matrix, normal_vec)
 
-        view_vector = center_view[0:3]
+        is_visible = False
 
-        len_v = np.linalg.norm(view_vector)
-        if len_v != 0:
-            view_vector /= len_v
+        if method == "Аксонометрическая":
+            # В ортогональной проекции мы смотрим строго вдоль оси Z.
+            # Нам не важна позиция полигона (center_view), важен только поворот нормали.
+            # В View Space камера смотрит вперед. Если Z-компонента нормали смотрит
+            # "на нас" (противоположно оси взгляда), грань видима.
+            # Попробуйте > 0. Если грани исчезнут - поменяйте на < 0.
+            is_visible = normal_view[2] > 0
 
-        dot_product = np.dot(normal_view[0:3], view_vector)
+        else: # Перспективная
+            # В перспективе мы смотрим из точки (0,0,0) в точку center_view.
+            # Вектор взгляда = center_view (так как camera в 0,0,0).
+            view_vector = center_view[0:3]
 
-        if dot_product > 0:
+            # Скалярное произведение
+            dot_product = np.dot(normal_view[0:3], view_vector)
+
+            # Если скалярное произведение < 0, значит угол между нормалью и
+            # лучом зрения тупой (они смотрят навстречу друг другу).
+            # Поменяйте знак на > 0, если грани вывернуты наизнанку.
+            is_visible = dot_product < 0
+
+        if is_visible:
             rendered_poly = render_polygon(p, method, window)
             if rendered_poly:
                 polygons_to_render.append(rendered_poly)
-
-    # === КОНЕЦ НОВОЙ ЛОГИКИ ===
 
     if use_zbuffer:
         polygons_to_render.sort(key=lambda x: x.depth, reverse=True)
