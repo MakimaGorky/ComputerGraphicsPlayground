@@ -18,7 +18,7 @@ from rotation_shape import *
 # ==========================================
 # КОНФИГУРАЦИЯ ИНТЕРФЕЙСА
 # ==========================================
-WINDOW_WIDTH = 1600
+WINDOW_WIDTH = 1540
 WINDOW_HEIGHT = 900
 SIDEBAR_WIDTH = 360  # Чуть шире для удобства
 VIEWPORT_START_X = SIDEBAR_WIDTH

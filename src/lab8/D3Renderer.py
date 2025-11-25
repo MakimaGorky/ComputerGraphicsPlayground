@@ -12,6 +12,19 @@ from camera import *
 WIDTH = 0
 HEIGHT = 0
 
+def get_view_matrix():
+    """Генерирует полную матрицу трансформации камеры (View Matrix)"""
+    # 1. Смещение мира, чтобы камера стала центром (0, 0, 0)
+    t_matrix = translation_matrix(-camera.x, -camera.y, -camera.z)
+
+    # 2. Поворот мира вокруг камеры (обратный поворот камеры)
+    rot_y_matrix = rotation_y_matrix(-camera.angle_y)
+    rot_x_matrix = rotation_x_matrix(-camera.angle_x)
+    rot_z_matrix = rotation_z_matrix(-camera.angle_z)
+
+    # Итоговая матрица: Сначала смещение, потом повороты
+    view_matrix = np.dot(rot_z_matrix, np.dot(rot_x_matrix, np.dot(rot_y_matrix, t_matrix)))
+    return view_matrix
 
 class PolygonProjection:
     def __init__(self, points: List[Tuple[float, float]] = [], depth: float = 0.0):
@@ -79,7 +92,7 @@ class PolygonProjection:
                 right_x = end_pos[0] - arrow_size * (dx * np.cos(angle) - dy * np.sin(angle))
                 right_y = end_pos[1] - arrow_size * (dy * np.cos(angle) + dx * np.sin(angle))
 
-                print(self.center_2d)
+                # print(self.center_2d)
 
                 pygame.draw.line(screen, color, end_pos, (int(left_x), int(left_y)), 2)
                 pygame.draw.line(screen, color, end_pos, (int(right_x), int(right_y)), 2)
@@ -168,101 +181,75 @@ def render_polygon(poly: Polygon, method: str, window: WindowInfo):
 
 
 def render_object(obj: Object, method: str, window: WindowInfo, use_zbuffer: bool = True):
-    """
-    Рендерит объект с возможностью использования Z-буфера
-
-    Args:
-        obj: Объект для рендеринга
-        method: Метод проекции ("Аксонометрическая" или "Перспективная")
-        window: Информация об окне
-        use_zbuffer: Использовать ли Z-буфер для сортировки
-
-    Returns:
-        Список проецированных полигонов
-    """
     projected_obj = []
-
     if not obj.polygons:
         return projected_obj
 
     obj_center = obj.get_center()
 
+    # 1. Получаем матрицу вида один раз для всего объекта
+    view_matrix = get_view_matrix()
+
+    # Списки для сортировки
+    polygons_to_render = []
+
+    for p in obj.polygons:
+        # Рассчитываем нормаль в системе координат объекта (как раньше)
+        p.calculate_normal(obj_center)
+        if p.normal is None:
+            continue
+
+        # === НОВАЯ ЛОГИКА ОТСЕЧЕНИЯ (CULLING) ===
+
+        # А. Переводим ЦЕНТР полигона в пространство камеры (View Space)
+        poly_center = p.get_center()
+        center_vec = np.array([poly_center.x, poly_center.y, poly_center.z, 1])
+        center_view = np.dot(view_matrix, center_vec)  # Координаты относительно камеры
+
+        # Б. Переводим НОРМАЛЬ в пространство камеры
+        # Важно: w=0, чтобы перемещение камеры не влияло на вектор направления, только поворот
+        normal_vec = np.array([p.normal.x, p.normal.y, p.normal.z, 0])
+        normal_view = np.dot(view_matrix, normal_vec)
+
+        # В. Проверка видимости
+        # В пространстве камеры:
+        # Камера находится в (0,0,0).
+        # Вектор взгляда = Вектор от центра полигона (center_view) к камере (0,0,0).
+        # ViewVector = (0,0,0) - center_view = -center_view
+
+        # Скалярное произведение: Normal_view * ViewVector
+        # Если dot > 0, грань видима.
+
+        # dot = Nx*(-Cx) + Ny*(-Cy) + Nz*(-Cz)
+        # Это равносильно: dot = -(Nx*Cx + Ny*Cy + Nz*Cz)
+
+        # Для удобства используем только 3 компоненты [0:3]
+        dot_product = np.dot(normal_view[0:3], -center_view[0:3])
+
+        if dot_product > 0:
+            rendered_poly = render_polygon(p, method, window)
+            if rendered_poly:
+                polygons_to_render.append(rendered_poly)
+
+    # === КОНЕЦ НОВОЙ ЛОГИКИ ===
+
     if use_zbuffer:
-        # Используем Z-буфер: сортируем по средней глубине
-        polygons_with_depth = []
-
-        for p in obj.polygons:
-            p.calculate_normal(obj_center)
-            if p.normal is None:
-                continue
-
-            # Вычисляем вектор взгляда для отсечения задних граней
-            poly_center = p.get_center()
-
-            if method == "Перспективная":
-                cam_poly_center_z = poly_center.z + camera.z
-                view_vector = Point(-poly_center.x, -poly_center.y, config.V_POINT - cam_poly_center_z)
-            else:
-                view_vector = Point(0, 0, poly_center.z - camera.z)
-
-            dot_product = (p.normal.x * view_vector.x +
-                          p.normal.y * view_vector.y +
-                          p.normal.z * view_vector.z)
-
-            # Отсечение задних граней
-            if dot_product > 0:
-                rendered_poly = render_polygon(p, method, window)
-                if rendered_poly:
-                    polygons_with_depth.append(rendered_poly)
-
-        # Сортируем полигоны по глубине (от дальних к ближним)
-        # Чем больше depth (дальше от камеры), тем раньше рисуем
-        polygons_with_depth.sort(key=lambda x: x.depth, reverse=True)
-        projected_obj = polygons_with_depth
-
+        polygons_to_render.sort(key=lambda x: x.depth, reverse=True)
+        projected_obj = polygons_to_render
     else:
-        # Старый метод без Z-буфера (только для выпуклых объектов)
-        def get_avg_z(p):
-            return sum(v.z for v in p.vertices) / len(p.vertices)
-
-        sorted_polygons = sorted(obj.polygons, key=get_avg_z, reverse=False)
-
-        for p in sorted_polygons:
-            p.calculate_normal(obj_center)
-            if p.normal is None:
-                continue
-
-            poly_center = p.get_center()
-
-            if method == "Перспективная":
-                cam_poly_center_z = poly_center.z + camera.z
-                view_vector = Point(-poly_center.x, -poly_center.y, config.V_POINT - cam_poly_center_z)
-            else:
-                view_vector = Point(-poly_center.x, -poly_center.y, 1)
-
-            dot_product = (p.normal.x * view_vector.x +
-                          p.normal.y * view_vector.y +
-                          p.normal.z * view_vector.z)
-
-            if dot_product > 0:
-                rendered_poly = render_polygon(p, method, window)
-                if rendered_poly:
-                    projected_obj.append(rendered_poly)
+        # Если Z-буфер выключен, сортируем просто по дальности (Painter's algo)
+        # Но лучше всегда использовать Z-сортировку для корректности
+        polygons_to_render.sort(key=lambda x: x.depth, reverse=False)
+        projected_obj = polygons_to_render
 
     return projected_obj
 
 
 def render_multiple_objects(objects: List[Object], method: str, window: WindowInfo, use_zbuffer: bool = True):
-    """
-    Рендерит несколько объектов с корректной обработкой перекрытий через Z-буфер
-
-    Args:
-        objects: Список объектов для рендеринга
-        method: Метод проекции
-        window: Информация об окне
-        use_zbuffer: Использовать ли Z-буфер
-    """
     all_polygons = []
+
+    # Получаем матрицу один раз на кадр (оптимизация)
+    view_matrix = get_view_matrix()
 
     for obj in objects:
         if not obj.polygons:
@@ -275,25 +262,27 @@ def render_multiple_objects(objects: List[Object], method: str, window: WindowIn
             if p.normal is None:
                 continue
 
+            # === ТА ЖЕ ЛОГИКА ===
             poly_center = p.get_center()
 
-            if method == "Перспективная":
-                cam_poly_center_z = poly_center.z + camera.z
-                view_vector = Point(-poly_center.x, -poly_center.y, config.V_POINT - cam_poly_center_z)
-            else:
-                view_vector = Point(0, 0, 1)
+            # Трансформация центра
+            center_vec = np.array([poly_center.x, poly_center.y, poly_center.z, 1])
+            center_view = np.dot(view_matrix, center_vec)
 
-            dot_product = (p.normal.x * view_vector.x +
-                          p.normal.y * view_vector.y +
-                          p.normal.z * view_vector.z)
+            # Трансформация нормали (w=0!)
+            normal_vec = np.array([p.normal.x, p.normal.y, p.normal.z, 0])
+            normal_view = np.dot(view_matrix, normal_vec)
+
+            # Проверка
+            dot_product = np.dot(normal_view[0:3], -center_view[0:3])
 
             if dot_product > 0:
                 rendered_poly = render_polygon(p, method, window)
                 if rendered_poly:
                     all_polygons.append(rendered_poly)
+            # ====================
 
     if use_zbuffer:
-        # Сортируем все полигоны всех объектов по глубине
         all_polygons.sort(key=lambda x: x.depth, reverse=True)
 
     return all_polygons
