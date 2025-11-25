@@ -79,13 +79,25 @@ class PolygonProjection:
                 right_x = end_pos[0] - arrow_size * (dx * np.cos(angle) - dy * np.sin(angle))
                 right_y = end_pos[1] - arrow_size * (dy * np.cos(angle) + dx * np.sin(angle))
 
+                print(self.center_2d)
+
                 pygame.draw.line(screen, color, end_pos, (int(left_x), int(left_y)), 2)
                 pygame.draw.line(screen, color, end_pos, (int(right_x), int(right_y)), 2)
 
 
 def render_point(vertex: Point, method: str, window: WindowInfo):
     """Возвращает 2D координаты и глубину точки после проекции"""
-    vertex_h = np.array([vertex.x, vertex.y, vertex.z + camera.z, 1])
+    vertex_h = np.array([vertex.x, vertex.y, vertex.z, 1])
+
+    t_matrix = translation_matrix(-camera.x, -camera.y, -camera.z)
+
+    rot_y_matrix = rotation_y_matrix(-camera.angle_y)
+    rot_x_matrix = rotation_x_matrix(-camera.angle_x)
+    rot_z_matrix = rotation_z_matrix(-camera.angle_z)
+
+    view_matrix = np.dot(rot_z_matrix, np.dot(rot_x_matrix, np.dot(rot_y_matrix, t_matrix))) # <--- ВКЛЮЧАЕМ Z-ПОВОРОТ
+
+    transformed_vertex_h = np.dot(view_matrix, vertex_h)
 
     if method == "Аксонометрическая":
         a = np.radians(config.ANGLE)
@@ -95,7 +107,7 @@ def render_point(vertex: Point, method: str, window: WindowInfo):
             [0, 0, 0, 0],
             [0, 0, 0, 1]
         ])
-        depth = vertex.z + camera.z  # Глубина для аксонометрии
+        depth = vertex.z # + camera.z  # Глубина для аксонометрии
     else:  # Перспективная
         c = config.V_POINT
         projection_matrix = np.array([
@@ -104,11 +116,14 @@ def render_point(vertex: Point, method: str, window: WindowInfo):
             [0, 0, 0, 0],
             [0, 0, -1 / c,  1]
         ])
-        depth = vertex.z + camera.z  # Используем Z координату как глубину
+        depth = vertex.z # + camera.z  # Используем Z координату как глубину
 
-    projected_vertex = np.dot(projection_matrix, vertex_h)
+    projected_vertex = np.dot(projection_matrix, transformed_vertex_h)
 
-    if projected_vertex[3] > 1e-6:
+    # print(projected_vertex)
+
+    if abs(projected_vertex[3]) > 1e-6:
+        # print('lol')
         x_normalized = projected_vertex[0] / projected_vertex[3]
         y_normalized = projected_vertex[1] / projected_vertex[3]
         return (x_normalized, y_normalized, depth)
@@ -188,7 +203,7 @@ def render_object(obj: Object, method: str, window: WindowInfo, use_zbuffer: boo
                 cam_poly_center_z = poly_center.z + camera.z
                 view_vector = Point(-poly_center.x, -poly_center.y, config.V_POINT - cam_poly_center_z)
             else:
-                view_vector = Point(0, 0, 1)
+                view_vector = Point(0, 0, poly_center.z - camera.z)
 
             dot_product = (p.normal.x * view_vector.x +
                           p.normal.y * view_vector.y +
@@ -223,7 +238,7 @@ def render_object(obj: Object, method: str, window: WindowInfo, use_zbuffer: boo
                 cam_poly_center_z = poly_center.z + camera.z
                 view_vector = Point(-poly_center.x, -poly_center.y, config.V_POINT - cam_poly_center_z)
             else:
-                view_vector = Point(0, 0, 1)
+                view_vector = Point(-poly_center.x, -poly_center.y, 1)
 
             dot_product = (p.normal.x * view_vector.x +
                           p.normal.y * view_vector.y +
