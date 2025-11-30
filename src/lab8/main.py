@@ -1,423 +1,443 @@
 import pygame
-from primitives import *
-from create_test_models import *
+import os
+import math
+import numpy as np
 from datetime import datetime
+from typing import List, Tuple, Any
+
+# Импорты модулей проекта
+from primitives import *
+# from create_test_models import *
 from object_IO import *
 from D3Renderer import *
 from camera import *
-import os
-import math
+from UI import *
 from plot import Plot
 from rotation_shape import *
 
-FULLSCREEN = False
+# ==========================================
+# КОНФИГУРАЦИЯ ИНТЕРФЕЙСА
+# ==========================================
+WINDOW_WIDTH = 1540
+WINDOW_HEIGHT = 900
+HALF_WIDTH = WINDOW_WIDTH // 2
+HALF_HEIGHT = WINDOW_HEIGHT // 2
+SIDEBAR_WIDTH = 360  # Чуть шире для удобства
+VIEWPORT_START_X = SIDEBAR_WIDTH
+VIEWPORT_WIDTH = WINDOW_WIDTH - SIDEBAR_WIDTH
+
+# Цвета
+VIEWPORT_COLOR = (240, 240, 245)
+SIDEBAR_COLOR = (50, 55, 65)
+TEXT_COLOR = (220, 220, 220)
+HEADER_COLOR = (255, 215, 0) # Золотистый для заголовков
+OVERLAY_BG = (70, 75, 85)
+
+# Глобальное состояние ввода
+input_boxes = {
+    "tx": "0", "ty": "0", "tz": "0",
+    "sx": "1.1", "sy": "1.1", "sz": "1.1",
+    "angle": "15",
+    "plot_func": "math.sin(x)*math.cos(y)*2",
+    "plot_lims": "-6, 6, -6, 6",
+    "plot_n": "40",
+    "rot_profile": "(50,0) (80,50) (80,100) (0,150)",
+    "rot_iter": "16",
+    "filename": "model"
+}
+active_input = None
+
+class LayoutManager:
+    """Класс для автоматического размещения элементов UI вертикально"""
+    def __init__(self, start_x, start_y, width):
+        self.start_x = start_x
+        self.start_y = start_y
+        self.current_y = start_y
+        self.width = width
+        self.padding = 10
+        self.line_height = 30 # Чуть компактнее
+
+    def next_pos(self, height=None):
+        h = height if height else self.line_height
+        rect = Rectangle(self.start_x + self.padding, self.current_y, self.width - 2 * self.padding, h)
+        self.current_y += h + 8
+        return rect
+
+    def split_row(self, parts, height=None):
+        """Разделяет строку на несколько частей"""
+        h = height if height else self.line_height
+        rects = []
+        total_w = self.width - 2 * self.padding
+        # parts - это веса ширины, например [1, 2] значит второй элемент в 2 раза шире первого
+        total_parts = sum(parts)
+        gap = 5
+        available_w = total_w - (len(parts) - 1) * gap
+        unit_w = available_w / total_parts
+
+        current_x = self.start_x + self.padding
+        for p in parts:
+            w = p * unit_w
+            rects.append(Rectangle(current_x, self.current_y, w, h))
+            current_x += w + gap
+
+        self.current_y += h + 8
+        return rects
+
+    def add_spacer(self, pixels=15):
+        self.current_y += pixels
+
+    def reset(self):
+        self.current_y = self.start_y
+
+def draw_text(screen, font, text, x, y, color=TEXT_COLOR):
+    surf = font.render(text, True, color)
+    screen.blit(surf, (x, y))
+
+def handle_input_logic(event):
+    global active_input
+    if event.type == pygame.KEYDOWN and active_input:
+        if event.key == pygame.K_RETURN:
+            active_input = None
+        elif event.key == pygame.K_BACKSPACE:
+            input_boxes[active_input] = input_boxes[active_input][:-1]
+        else:
+            input_boxes[active_input] += event.unicode
 
 def app():
-    current_file_path = os.path.abspath(__file__)
-    current_dir = os.path.dirname(current_file_path)
-    # Исправляем путь к папке models, чтобы он был более надежным
-    models_dir = os.path.join(current_dir, 'models')
-    if not os.path.exists(models_dir):
-        os.makedirs(models_dir)
+    global active_input
 
+    # --- Инициализация путей ---
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    models_dir = os.path.join(current_dir, 'models')
+    if not os.path.exists(models_dir): os.makedirs(models_dir)
 
     pygame.init()
+    screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
+    pygame.display.set_caption("3D Renderer Studio")
 
-    screen = pygame.display.set_mode((1400, 900)) # Рекомендую задать фиксированный размер для удобства верстки UI
-    if FULLSCREEN:
-        screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+    font = pygame.font.Font(None, 24)
+    header_font = pygame.font.Font(None, 30)
 
-    pygame.display.set_caption("3DRenderer")
+    # --- Настройка камеры ---
+    # Важно: устанавливаем камеру в центр области просмотра (viewport)
+    camera.x = 0
+    camera.y = 0
+    camera.z = -800 # Начальный Z
 
+    # WindowInfo нужен рендереру (хотя D3Renderer больше полагается на camera.x/y)
     window_info = get_window_info(screen)
 
-    objects = [
+    # --- Состояние Приложения ---
+    obj_options = [
         ObjectOption("Тетраэдр", create_tetrahedron),
-        ObjectOption("Гексаэдр", create_cube),
+        ObjectOption("Куб", create_cube),
         ObjectOption("Октаэдр", create_octahedron),
         ObjectOption("Икосаэдр", create_icosahedron),
         ObjectOption("Додекаэдр", create_dodecahedron)
     ]
+    curr_obj_idx = 1 # Куб по умолчанию
 
-    object_count = len(objects)
-    current_object = 0
-    show_dropdown_objects = False
-    ui_background_color = (220, 220, 220)
+    main_object = obj_options[curr_obj_idx].create()
+    scene_objects = [main_object]
+    scene_mode = "single"
 
-    font = pygame.font.Font(None, 28)
-    small_font = pygame.font.Font(None, 24)
+    render_modes = ["Перспективная", "Аксонометрическая"]
+    curr_render_idx = 0
 
-    dropdown_bounds_objects = Rectangle(20, 20, 180, 35)
-
-    renders = ["Аксонометрическая", "Перспективная"]
-    renders_count = len(renders)
-    current_render = 0
-    show_dropdown_renders = False
-    dropdown_bounds_renders = Rectangle(220, 20, 230, 35)
-
-    main_object: Optional[Object] = objects[current_object].create()
-    rendered_object = render_object(main_object, renders[current_render], window_info)
-
-    last_object = -1
-    last_render = -1
-
-    # Поля ввода параметров
-    input_boxes = {
-        "translation_x": "0",
-        "translation_y": "20",
-        "translation_z": "0",
-        "scale_x": "1.1",
-        "scale_y": "1.1",
-        "scale_z": "1.1",
-        "rotation_angle": "15",
-        "custom_line_p1": "0,0,0",
-        "custom_line_p2": "100,100,100",
-        "custom_rotation_angle": "30",
-        "filename": "model",
-        # ===== ПОЛЯ ДЛЯ ГРАФИКА =====
-        "plot_function": "math.sin(x) * math.cos(y) * 2",
-        "plot_x_min": "-6",
-        "plot_x_max": "6",
-        "plot_y_min": "-6",
-        "plot_y_max": "6",
-        "plot_n_points": "40",
-        # ====================================
-        # ===== НОВЫЕ ПОЛЯ ДЛЯ ФИГУРЫ ВРАЩЕНИЯ =====
-        "rot_shape_profile": "(50, 0) (80, 50) (80, 100) (50, 150)", # Пример профиля
-        "rot_shape_iterations": "16",
-        # ============================================
+    settings = {
+        "zbuffer": True,
+        "faces": True,
+        "wireframe": True,
+        "normals": False,
+        "rotate": True
     }
 
-    active_input = None
+    # UI State
+    show_obj_dropdown = False
 
-    # Кнопки управления
-    y_offset = 80
-    btn_width, btn_height = 200, 35
-
-    # Смещение для нового раздела UI (График + Фигура вращения)
-    plot_block_height = 40 + 35 * 4 + 40 # Заголовок, 4 строки инпутов, кнопка
-
-    # Начальная Y-координата для блока фигуры вращения, чтобы разместить его под графиком
-    rot_shape_y_offset = y_offset + plot_block_height + 140
-
-    transform_buttons = [
-        Rectangle(1140, y_offset, btn_width, btn_height),  # Перенос
-        Rectangle(1140, y_offset + 45, btn_width, btn_height),  # Масштаб
-        Rectangle(1140, y_offset + 90, btn_width, btn_height),  # Поворот X
-        Rectangle(1140, y_offset + 135, btn_width, btn_height),  # Поворот Y
-        Rectangle(1140, y_offset + 180, btn_width, btn_height),  # Поворот Z
-        Rectangle(1140, y_offset + 225, btn_width, btn_height),  # Отражение XY
-        Rectangle(1140, y_offset + 270, btn_width, btn_height),  # Отражение XZ
-        Rectangle(1140, y_offset + 315, btn_width, btn_height),  # Отражение YZ
-        Rectangle(1140, y_offset + 360, btn_width, btn_height),  # Поворот вокруг произвольной прямой
-        Rectangle(1140, y_offset + 405, btn_width, btn_height),  # Сброс
-    ]
-
-    # Поля ввода
-    input_rects = {
-        "translation_x": Rectangle(800, y_offset, 80, 30),
-        "translation_y": Rectangle(920, y_offset, 80, 30),
-        "translation_z": Rectangle(1040, y_offset, 80, 30),
-        "scale_x": Rectangle(800, y_offset + 45, 80, 30),
-        "scale_y": Rectangle(920, y_offset + 45, 80, 30),
-        "scale_z": Rectangle(1040, y_offset + 45, 80, 30),
-        "rotation_angle": Rectangle(800, y_offset + 135, 170, 30),
-        "custom_line_p1": Rectangle(800, y_offset + 360, 170, 30),
-        "custom_line_p2": Rectangle(800, y_offset + 395, 170, 30),
-        "custom_rotation_angle": Rectangle(800, y_offset + 430, 170, 30),
-        "filename": Rectangle(20, window_info.height - 185, 150, 35),
-        "plot_function": Rectangle(100, y_offset + 100, 350, 35),
-        "plot_x_min": Rectangle(110, y_offset + 145, 80, 35),
-        "plot_x_max": Rectangle(200, y_offset + 145, 80, 35),
-        "plot_y_min": Rectangle(110, y_offset + 190, 80, 35),
-        "plot_y_max": Rectangle(200, y_offset + 190, 80, 35),
-        "plot_n_points": Rectangle(170, y_offset + 235, 110, 35),
-        "rot_shape_profile": Rectangle(20, rot_shape_y_offset + 40, 430, 35),
-        "rot_shape_iterations": Rectangle(150, rot_shape_y_offset + 85, 80, 35),
-    }
-
-    # Кнопки файловых операций
-    file_buttons = [
-        Rectangle(20, window_info.height - 150, 150, 35),  # Загрузить
-        Rectangle(20, window_info.height - 105, 150, 35),  # Сохранить
-    ]
-
-    plot_button = Rectangle(20, y_offset + 280, 430, 40)
-    rot_shape_button = Rectangle(20, rot_shape_y_offset + 130, 430, 40)
-
-    # ===== НОВЫЕ ПЕРЕМЕННЫЕ И КНОПКА ДЛЯ ВРАЩЕНИЯ =====
-    auto_rotate = True
-    auto_rotate_button = Rectangle(470, 20, 200, 35)
-    # ===================================================
-
-    running = True
     clock = pygame.time.Clock()
-    button_clicked = False
+    layout = LayoutManager(0, 0, SIDEBAR_WIDTH)
+    running = True
 
+    # ==========================
+    # ГЛАВНЫЙ ЦИКЛ
+    # ==========================
     while running:
+        clicked = False
+        mouse_pos = pygame.mouse.get_pos()
+
+        # 1. События
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
             elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
-                    running = False
-                elif active_input and event.key == pygame.K_RETURN:
-                    active_input = None
-                elif active_input:
-                    if event.key == pygame.K_BACKSPACE:
-                        input_boxes[active_input] = input_boxes[active_input][:-1]
-                    else:
-                        input_boxes[active_input] += event.unicode
+                if event.key == pygame.K_ESCAPE: running = False
+                handle_input_logic(event)
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:
-                    button_clicked = True
-                    # Проверяем клик по полям ввода
-                    active_input = None
-                    for key, rect in input_rects.items():
-                        if (rect.x <= event.pos[0] <= rect.x + rect.width and
-                            rect.y <= event.pos[1] <= rect.y + rect.height):
-                            active_input = key
-                            break
+                    clicked = True
+                    # Сброс фокуса инпута при клике (если клик не по новому инпуту - обработается ниже)
+                    # Если клик был по меню, мы его перехватим позже
 
-        # ===== АВТОМАТИЧЕСКОЕ ВРАЩЕНИЕ =====
-        if auto_rotate and main_object:
-            rotate_around_center(main_object, 'Y', np.radians(0.7))
-            rotate_around_center(main_object, 'X', np.radians(0.4))
-        # ======================================
+        # 2. Логика вращения
+        if settings["rotate"]:
+            targets = scene_objects if scene_mode == "multiple" else [main_object]
+            for obj in targets:
+                if obj:
+                    rotate_around_center(obj, 'Y', np.radians(0.5))
+                    rotate_around_center(obj, 'X', np.radians(0.3))
 
         camera.update()
-        screen.fill(ui_background_color)
 
-        rendered_object = render_object(main_object, renders[current_render], window_info)
-        if rendered_object:
-            for rp in rendered_object:
-                rp.draw(screen)
+        # 3. Отрисовка фона и Viewport
+        screen.fill(SIDEBAR_COLOR) # Весь фон темный (подложка сайдбара)
+        # Рисуем область просмотра поверх
+        pygame.draw.rect(screen, VIEWPORT_COLOR, (VIEWPORT_START_X, 0, VIEWPORT_WIDTH, WINDOW_HEIGHT))
 
-        # ===== UI-ЭЛЕМЕНТЫ =====
+        # 4. Рендеринг 3D сцены
+        to_render = [o for o in (scene_objects if scene_mode == "multiple" else [main_object]) if o is not None]
 
-        # Кнопка для вкл/выкл вращения
-        rotate_btn_text = "Вращение: ВКЛ" if auto_rotate else "Вращение: ВЫКЛ"
-        if button(screen, font, auto_rotate_button, rotate_btn_text) and button_clicked:
-            auto_rotate = not auto_rotate
-            button_clicked = False
+        # Используем функции рендеринга
+        # (Они рисуют прямо на screen)
+        render_func = render_multiple_objects if scene_mode == "multiple" else render_object
 
-        # Выпадающий список объектов
-        if button(screen, font, dropdown_bounds_objects, objects[current_object].name) and button_clicked:
-            show_dropdown_objects = not show_dropdown_objects
-            button_clicked = False
+        if scene_mode == "single" and len(to_render) > 0:
+            rendered_polys = render_object(to_render[0], render_modes[curr_render_idx], window_info, settings["zbuffer"])
+        elif scene_mode == "multiple":
+            rendered_polys = render_multiple_objects(to_render, render_modes[curr_render_idx], window_info, settings["zbuffer"])
+        else:
+            rendered_polys = []
 
-        if show_dropdown_objects:
-            button_cnt = 1
-            for i in range(object_count):
-                if i == current_object:
-                    continue
-                option_rect = Rectangle(
-                    dropdown_bounds_objects.x,
-                    dropdown_bounds_objects.y + button_cnt * 45,
-                    dropdown_bounds_objects.width,
-                    dropdown_bounds_objects.height
-                )
-                if button(screen, font, option_rect, objects[i].name) and button_clicked:
-                    current_object = i
-                    show_dropdown_objects = False
-                    button_clicked = False
-                button_cnt += 1
+        if rendered_polys:
+            for poly in rendered_polys:
+                poly.draw(screen, settings["faces"], settings["wireframe"])
+                if settings["normals"]: poly.draw_normal(screen)
 
-        if current_object != last_object:
-            main_object = objects[current_object].create()
-            last_object = current_object
+        # ==========================
+        # ГЕНЕРАЦИЯ UI (САЙДБАР)
+        # ==========================
+        if clicked:
+            active_input = None
 
-        # Выпадающий список типов рендера
-        if button(screen, font, dropdown_bounds_renders, renders[current_render]) and button_clicked:
-            show_dropdown_renders = not show_dropdown_renders
-            button_clicked = False
+        layout.reset()
+        layout.add_spacer(15)
+        draw_text(screen, header_font, "НАСТРОЙКИ СЦЕНЫ", 20, layout.current_y, HEADER_COLOR)
+        layout.add_spacer(25)
 
-        if show_dropdown_renders:
-            button_cnt = 1
-            for i in range(renders_count):
-                if i == current_render:
-                    continue
-                option_rect = Rectangle(
-                    dropdown_bounds_renders.x,
-                    dropdown_bounds_renders.y + button_cnt * 45,
-                    dropdown_bounds_renders.width,
-                    dropdown_bounds_renders.height
-                )
-                if button(screen, font, option_rect, renders[i]) and button_clicked:
-                    current_render = i
-                    show_dropdown_renders = False
-                    button_clicked = False
-                button_cnt += 1
+        # Переменная для отложенной отрисовки выпадающего меню
+        dropdown_to_draw = None
 
-        if current_render != last_render:
-            last_render = current_render
+        # --- Выбор объекта ---
+        rect_obj = layout.next_pos()
+        if button(screen, font, rect_obj, f"Объект: {obj_options[curr_obj_idx].name}") and clicked:
+            show_obj_dropdown = not show_obj_dropdown
+            clicked = False # Поглощаем клик
 
-        # Отображение центра объекта
-        center = main_object.get_center()
-        center_text = small_font.render(f"Центр: {center}", True, (0, 0, 0))
-        screen.blit(center_text, (20, 70))
+        # Если меню открыто, запоминаем его координаты, но не рисуем пока
+        if show_obj_dropdown:
+            dropdown_to_draw = (rect_obj, obj_options)
 
-        # --- РАЗДЕЛ ПОСТРОЕНИЯ ГРАФИКА ---
-        plot_title_text = font.render("Построение графика z = f(x, y)", True, (0, 0, 0))
-        screen.blit(plot_title_text, (20, y_offset + 70))
-        screen.blit(small_font.render("f(x, y) =", True, (0, 0, 0)), (20, y_offset + 110))
-        screen.blit(small_font.render("X min, max:", True, (0, 0, 0)), (20, y_offset + 152))
-        screen.blit(small_font.render("Y min, max:", True, (0, 0, 0)), (20, y_offset + 197))
-        screen.blit(small_font.render("Кол-во точек:", True, (0, 0, 0)), (20, y_offset + 242))
+        # --- Режим сцены ---
+        r_mode, r_add, r_clr = layout.split_row([1, 0.8, 0.8])
+        mode_txt = "Режим: МНОГО" if scene_mode == "multiple" else "Режим: ОДИН"
+        if button(screen, font, r_mode, mode_txt) and clicked:
+            scene_mode = "multiple" if scene_mode == "single" else "single"
+            if scene_mode == "single": scene_objects = [main_object]
+            else: scene_objects = [main_object]
 
-        if button(screen, font, plot_button, "Построить график") and button_clicked:
+        if button(screen, font, r_add, "+ Доб.") and clicked:
+            if scene_mode == "multiple":
+                new_obj = obj_options[curr_obj_idx].create()
+                import random
+                # Случайное смещение, чтобы видно было новый объект
+                dx, dy = random.randint(-200, 200), random.randint(-150, 150)
+                new_obj.apply_transformation(translation_matrix(dx, dy, 0))
+                scene_objects.append(new_obj)
+
+        if button(screen, font, r_clr, "Очист.") and clicked:
+            if scene_mode == "multiple": scene_objects = []
+
+        layout.add_spacer(15)
+        draw_text(screen, header_font, "ОТОБРАЖЕНИЕ", 20, layout.current_y, HEADER_COLOR)
+        layout.add_spacer(20)
+
+        # --- Рендер и опции ---
+        rect_rnd = layout.next_pos()
+        if button(screen, font, rect_rnd, f"Вид: {render_modes[curr_render_idx]}") and clicked:
+            curr_render_idx = (curr_render_idx + 1) % len(render_modes)
+
+        # Grid of toggles
+        row1 = layout.split_row([1, 1])
+        if button(screen, font, row1[0], f"Z-Buf: {'ВКЛ' if settings['zbuffer'] else 'ВЫКЛ'}") and clicked:
+            settings["zbuffer"] = not settings["zbuffer"]
+        if button(screen, font, row1[1], f"Вращ.: {'ВКЛ' if settings['rotate'] else 'ВЫКЛ'}") and clicked:
+            settings["rotate"] = not settings["rotate"]
+
+        row2 = layout.split_row([1, 1, 1])
+        if button(screen, font, row2[0], f"Грани{' ✔' if settings['faces'] else ''}") and clicked:
+            settings['faces'] = not settings['faces']
+        if button(screen, font, row2[1], f"Сетка{' ✔' if settings['wireframe'] else ''}") and clicked:
+            settings['wireframe'] = not settings['wireframe']
+        if button(screen, font, row2[2], f"Норм.{' ✔' if settings['normals'] else ''}") and clicked:
+            settings['normals'] = not settings['normals']
+
+        layout.add_spacer(15)
+        draw_text(screen, header_font, "ТРАНСФОРМАЦИИ", 20, layout.current_y, HEADER_COLOR)
+        layout.add_spacer(20)
+
+        targets = scene_objects if scene_mode == "multiple" else [main_object]
+
+        # --- Move ---
+        lbl_t, inp_tx, inp_ty, inp_tz, btn_t = layout.split_row([0.6, 1, 1, 1, 1.2])
+        draw_text(screen, font, "Move:", lbl_t.x, lbl_t.y + 8)
+
+        # Helper for inputs
+        def handle_input_ui(rect, key):
+            is_active = (active_input == key)
+            input_box(screen, font, rect, input_boxes[key], is_active)
+            if clicked and rect.x < mouse_pos[0] < rect.x+rect.width and rect.y < mouse_pos[1] < rect.y+rect.height:
+                return True
+            return False
+
+        if handle_input_ui(inp_tx, "tx"): active_input = "tx"
+        if handle_input_ui(inp_ty, "ty"): active_input = "ty"
+        if handle_input_ui(inp_tz, "tz"): active_input = "tz"
+
+        if button(screen, font, btn_t, "OK") and clicked:
             try:
-                func_str = input_boxes["plot_function"]
-                x_min = float(input_boxes["plot_x_min"])
-                x_max = float(input_boxes["plot_x_max"])
-                y_min = float(input_boxes["plot_y_min"])
-                y_max = float(input_boxes["plot_y_max"])
-                n_points = int(input_boxes["plot_n_points"])
-                func = lambda x, y: eval(func_str, {"x": x, "y": y, "math": math})
-                plot_obj = Plot(
-                    f=func,
-                    cut_off=((x_min, x_max), (y_min, y_max)),
-                    number_of_points=n_points
-                )
-                temp_plot_filename = os.path.join(models_dir, "_temp_plot.obj")
-                plot_obj.export(temp_plot_filename)
-                main_object = load_obj(temp_plot_filename)
-            except Exception as e:
-                print(f"Ошибка при построении графика: {e}")
-            button_clicked = False
+                mat = translation_matrix(float(input_boxes["tx"]), float(input_boxes["ty"]), float(input_boxes["tz"]))
+                for o in targets: o.apply_transformation(mat)
+            except: pass
 
-        # --- РАЗДЕЛ ПОСТРОЕНИЯ ФИГУРЫ ВРАЩЕНИЯ ---
-        rot_shape_title_text = font.render("Построение фигуры вращения", True, (0, 0, 0))
-        screen.blit(rot_shape_title_text, (20, rot_shape_y_offset))
-        screen.blit(small_font.render("Профиль (x, y) - список точек:", True, (0, 0, 0)), (20, rot_shape_y_offset + 15))
-        screen.blit(small_font.render("Итерации/Сегменты:", True, (0, 0, 0)), (20, rot_shape_y_offset + 92))
+        # --- Scale ---
+        lbl_s, inp_sx, inp_sy, inp_sz, btn_s = layout.split_row([0.6, 1, 1, 1, 1.2])
+        draw_text(screen, font, "Scale:", lbl_s.x, lbl_s.y + 8)
+        if handle_input_ui(inp_sx, "sx"): active_input = "sx"
+        if handle_input_ui(inp_sy, "sy"): active_input = "sy"
+        if handle_input_ui(inp_sz, "sz"): active_input = "sz"
 
-        if button(screen, font, rot_shape_button, "Построить фигуру вращения") and button_clicked:
+        if button(screen, font, btn_s, "OK") and clicked:
             try:
-                profile_str = input_boxes["rot_shape_profile"]
-                iterations = int(input_boxes["rot_shape_iterations"])
-                dots = get_dots_from_string(profile_str)
-                rot_shape_object = create_solid_of_revolution(dots, iterations)
-                main_object = rot_shape_object
-            except Exception as e:
-                print(f"Ошибка при построении фигуры вращения: {e}")
-            button_clicked = False
+                sx, sy, sz = float(input_boxes["sx"]), float(input_boxes["sy"]), float(input_boxes["sz"])
+                for o in targets: scale_relative_to_center(o, sx, sy, sz)
+            except: pass
 
-        # --- Поля ввода и кнопки преобразований ---
-        screen.blit(small_font.render("dx:", True, (0, 0, 0)), (770, y_offset + 5))
-        screen.blit(small_font.render("dy:", True, (0, 0, 0)), (890, y_offset + 5))
-        screen.blit(small_font.render("dz:", True, (0, 0, 0)), (1010, y_offset + 5))
-        screen.blit(small_font.render("sx:", True, (0, 0, 0)), (770, y_offset + 50))
-        screen.blit(small_font.render("sy:", True, (0, 0, 0)), (890, y_offset + 50))
-        screen.blit(small_font.render("sz:", True, (0, 0, 0)), (1010, y_offset + 50))
-        screen.blit(small_font.render("Угол (°):", True, (0, 0, 0)), (720, y_offset + 140))
-        screen.blit(small_font.render("Точка 1 (x,y,z):", True, (0, 0, 0)), (650, y_offset + 365))
-        screen.blit(small_font.render("Точка 2 (x,y,z):", True, (0, 0, 0)), (650, y_offset + 400))
-        screen.blit(small_font.render("Угол (°):", True, (0, 0, 0)), (650, y_offset + 435))
+        # --- Rotate ---
+        lbl_r, inp_ang, btn_rx, btn_ry, btn_rz = layout.split_row([0.8, 1, 0.7, 0.7, 0.7])
+        draw_text(screen, font, "Rot(°):", lbl_r.x, lbl_r.y + 8)
+        if handle_input_ui(inp_ang, "angle"): active_input = "angle"
 
-        for key, rect in input_rects.items():
-            input_box(screen, small_font, rect, input_boxes[key], active_input == key)
+        try: ang = np.radians(float(input_boxes["angle"]))
+        except: ang = 0
 
-        if button(screen, font, transform_buttons[0], "Перенос") and button_clicked:
+        if button(screen, font, btn_rx, "X") and clicked:
+            for o in targets: rotate_around_center(o, 'X', ang)
+        if button(screen, font, btn_ry, "Y") and clicked:
+            for o in targets: rotate_around_center(o, 'Y', ang)
+        if button(screen, font, btn_rz, "Z") and clicked:
+            for o in targets: rotate_around_center(o, 'Z', ang)
+
+        layout.add_spacer(15)
+        draw_text(screen, header_font, "ГЕНЕРАТОРЫ", 20, layout.current_y, HEADER_COLOR)
+        layout.add_spacer(20)
+
+        # --- Plot ---
+        draw_text(screen, font, "f(x,y) =", 20, layout.current_y)
+        layout.next_pos(10) # offset
+        rect_f = layout.next_pos()
+        if handle_input_ui(rect_f, "plot_func"): active_input = "plot_func"
+
+        r_lim_lbl, r_lim_inp, r_n_lbl, r_n_inp = layout.split_row([0.8, 2, 0.5, 0.8])
+        draw_text(screen, font, "Lims:", r_lim_lbl.x, r_lim_lbl.y+8)
+        if handle_input_ui(r_lim_inp, "plot_lims"): active_input = "plot_lims"
+        draw_text(screen, font, "N:", r_n_lbl.x, r_n_lbl.y+8)
+        if handle_input_ui(r_n_inp, "plot_n"): active_input = "plot_n"
+
+        if button(screen, font, layout.next_pos(), "Построить График") and clicked:
             try:
-                dx = float(input_boxes["translation_x"])
-                dy = float(input_boxes["translation_y"])
-                dz = float(input_boxes["translation_z"])
-                main_object.apply_transformation(translation_matrix(dx, dy, dz))
-            except ValueError:
-                pass
-            button_clicked = False
+                p_func = lambda x, y: eval(input_boxes["plot_func"], {"x": x, "y": y, "math": math})
+                lims = [float(v) for v in input_boxes["plot_lims"].split(',')]
+                n_p = int(input_boxes["plot_n"])
+                plot_obj = Plot(p_func, ((lims[0], lims[1]), (lims[2], lims[3])), n_p)
+                path = os.path.join(models_dir, "_temp.obj")
+                plot_obj.export(path)
+                main_object = load_obj(path)
+                if scene_mode == "single": scene_objects = [main_object]
+            except Exception as e: print(e)
 
-        if button(screen, font, transform_buttons[1], "Масштаб") and button_clicked:
+        # --- Revolution ---
+        layout.add_spacer(5)
+        draw_text(screen, font, "Профиль вращения (x,y):", 20, layout.current_y)
+        layout.next_pos(10)
+        rect_prof = layout.next_pos()
+        if handle_input_ui(rect_prof, "rot_profile"): active_input = "rot_profile"
+
+        r_iter_lbl, r_iter_inp, r_rot_btn = layout.split_row([1, 0.8, 1.5])
+        draw_text(screen, font, "Сегменты:", r_iter_lbl.x, r_iter_lbl.y+8)
+        if handle_input_ui(r_iter_inp, "rot_iter"): active_input = "rot_iter"
+
+        if button(screen, font, r_rot_btn, "Создать тело") and clicked:
             try:
-                sx = float(input_boxes["scale_x"])
-                sy = float(input_boxes["scale_y"])
-                sz = float(input_boxes["scale_z"])
-                scale_relative_to_center(main_object, sx, sy, sz)
-            except ValueError:
-                pass
-            button_clicked = False
+                dots = get_dots_from_string(input_boxes["rot_profile"])
+                it = int(input_boxes["rot_iter"])
+                main_object = create_solid_of_revolution(dots, it)
+                if scene_mode == "single": scene_objects = [main_object]
+            except Exception as e: print(e)
 
-        if button(screen, font, transform_buttons[2], "Поворот X") and button_clicked:
+        layout.add_spacer(15)
+
+        # --- File I/O ---
+        r_fn, r_load, r_save = layout.split_row([1.5, 0.8, 0.8])
+        if handle_input_ui(r_fn, "filename"): active_input = "filename"
+        if button(screen, font, r_load, "Загрузить") and clicked:
             try:
-                angle = np.radians(float(input_boxes["rotation_angle"]))
-                rotate_around_center(main_object, 'X', angle)
-            except ValueError:
-                pass
-            button_clicked = False
-
-        if button(screen, font, transform_buttons[3], "Поворот Y") and button_clicked:
+                path = os.path.join(models_dir, input_boxes["filename"]+".obj")
+                main_object = load_obj(path)
+                if scene_mode == "single": scene_objects = [main_object]
+            except: print("Error loading")
+        if button(screen, font, r_save, "Сохр.") and clicked:
             try:
-                angle = np.radians(float(input_boxes["rotation_angle"]))
-                rotate_around_center(main_object, 'Y', angle)
-            except ValueError:
-                pass
-            button_clicked = False
+                path = os.path.join(models_dir, f"saved_{datetime.now().strftime('%H%M%S')}.obj")
+                save_obj(main_object, path)
+            except: pass
 
-        if button(screen, font, transform_buttons[4], "Поворот Z") and button_clicked:
-            try:
-                angle = np.radians(float(input_boxes["rotation_angle"]))
-                rotate_around_center(main_object, 'Z', angle)
-            except ValueError:
-                pass
-            button_clicked = False
+        # ==================================================
+        # ОТРИСОВКА ВСПЛЫВАЮЩИХ ОКОН (OVERLAY)
+        # Рисуем их в самом конце, чтобы они перекрывали всё
+        # ==================================================
+        if dropdown_to_draw:
+            parent_rect, options = dropdown_to_draw
+            item_h = 35
+            total_h = len(options) * item_h
 
-        if button(screen, font, transform_buttons[5], "Отражение XY") and button_clicked:
-            main_object.apply_transformation(reflection_xy_matrix())
-            button_clicked = False
+            # Рисуем подложку
+            dropdown_bg_rect = (parent_rect.x, parent_rect.y + parent_rect.height, parent_rect.width, total_h)
+            pygame.draw.rect(screen, OVERLAY_BG, dropdown_bg_rect)
+            pygame.draw.rect(screen, TEXT_COLOR, dropdown_bg_rect, 1) # Рамка
 
-        if button(screen, font, transform_buttons[6], "Отражение XZ") and button_clicked:
-            main_object.apply_transformation(reflection_xz_matrix())
-            button_clicked = False
+            for i, opt in enumerate(options):
+                opt_rect = Rectangle(parent_rect.x, parent_rect.y + parent_rect.height + i * item_h, parent_rect.width, item_h)
 
-        if button(screen, font, transform_buttons[7], "Отражение YZ") and button_clicked:
-            main_object.apply_transformation(reflection_yz_matrix())
-            button_clicked = False
+                # Используем button(), но с проверкой клика здесь же
+                if button(screen, font, opt_rect, opt.name) and clicked:
+                    curr_obj_idx = i
+                    main_object = obj_options[curr_obj_idx].create()
+                    if scene_mode == "single": scene_objects = [main_object]
+                    show_obj_dropdown = False
+                    clicked = False # Клик обработан
 
-        if button(screen, font, transform_buttons[8], "Поворот вокруг прямой") and button_clicked:
-            try:
-                p1_coords = [float(x.strip()) for x in input_boxes["custom_line_p1"].split(',')]
-                p2_coords = [float(x.strip()) for x in input_boxes["custom_line_p2"].split(',')]
-                angle = np.radians(float(input_boxes["custom_rotation_angle"]))
+            # Если кликнули мимо списка, закрываем его
+            if clicked:
+                show_obj_dropdown = False
 
-                if len(p1_coords) == 3 and len(p2_coords) == 3:
-                    p1 = Point(p1_coords[0], p1_coords[1], p1_coords[2])
-                    p2 = Point(p2_coords[0], p2_coords[1], p2_coords[2])
-                    rotate_around_line(main_object, p1, p2, angle)
-            except ValueError:
-                pass
-            button_clicked = False
-
-        if button(screen, font, transform_buttons[9], "Сброс") and button_clicked:
-            main_object = objects[current_object].create()
-            button_clicked = False
-
-        # Кнопки файловых операций
-        if button(screen, font, file_buttons[0], "Загрузить OBJ") and button_clicked:
-            filename = input_boxes["filename"] + '.obj'
-            file_path = os.path.join(models_dir, filename)
-            try:
-                main_object = load_obj(file_path)
-                print(f"Файл {filename} загружен.")
-            except:
-                print(f"Не удалось загрузить файл {filename}")
-            button_clicked = False
-
-        if button(screen, font, file_buttons[1], "Сохранить OBJ") and button_clicked:
-            filename = f"saved_model_{datetime.now().strftime('%H_%M_%S')}.obj"
-            file_path = os.path.join(models_dir, filename)
-            try:
-                save_obj(main_object, file_path)
-            except Exception as e:
-                print(f"Ошибка сохранения: {e}")
-            button_clicked = False
-
+        # Сброс клика в конце кадра, если он никем не обработан
+        # if clicked and active_input and not any(rect.collidepoint(mouse_pos) for rect in [input_boxes.get(k) for k in input_boxes if isinstance(input_boxes.get(k), pygame.Rect)]):
+        #     active_input = None
 
         pygame.display.flip()
-        clock.tick(60)
+        clock.tick(30)
 
     pygame.quit()
-
 
 if __name__ == "__main__":
     app()
