@@ -13,6 +13,7 @@ def load_obj(filename: str) -> Object:
         Объект типа Object, представляющий модель.
     """
     vertices = []
+    uv_coords = []
     polygons = []
 
     # Используем константу масштабирования из файла конфигурации для приведения модели к общему размеру
@@ -28,18 +29,27 @@ def load_obj(filename: str) -> Object:
                     x, y, z = map(float, parts[1:4])
                     # Масштабируем вершину при загрузке
                     vertices.append(Point(x * scale, -y * scale, z * scale))
+                elif line.startswith('vt '):
+                    parts = line.strip().split()
+                    u, v = map(float, parts[1:3])
+                    uv_coords.append([u, v])
                 elif line.startswith('f '):
                     # Парсинг индексов вершин для полигона (грани)
                     parts = line.strip().split()[1:]
                     face_indices = []
+                    face_uv_indices = []
                     for part in parts:
                         # Индексы в .obj могут быть сложными (v/vt/vn), извлекаем только индекс вершины
-                        index_str = part.split('/')[0]
+                        index_str, uv_index_str = part.split('/')[0:2]
                         # Индексы в .obj начинаются с 1, а в нашем списке - с 0
                         face_indices.append(int(index_str) - 1)
+                        face_uv_indices.append(int(uv_index_str) - 1)
 
                     # Создаем полигон из вершин по их индексам
                     polygon_vertices = [vertices[i] for i in face_indices]
+                    for i in range(len(face_uv_indices)):
+                        polygon_vertices[i].u = uv_coords[face_uv_indices[i]][0]
+                        polygon_vertices[i].v = uv_coords[face_uv_indices[i]][1]
                     polygons.append(Polygon(polygon_vertices))
 
     except FileNotFoundError:

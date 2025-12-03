@@ -98,9 +98,9 @@ class Polygon:
                                self.get_center().z - object_center.z)
 
         # Если скалярное произведение < 0, нормаль смотрит внутрь. Инвертируем ее.
-        dot_product = nx * center_to_face.x + ny * center_to_face.y + nz * center_to_face.z
-        if dot_product < 0:
-            nx, ny, nz = -nx, -ny, -nz
+        # dot_product = nx * center_to_face.x + ny * center_to_face.y + nz * center_to_face.z
+        # if dot_product < 0:
+        nx, ny, nz = -nx, -ny, -nz  
 
         self.normal = Point(nx, ny, nz)
     # =========================

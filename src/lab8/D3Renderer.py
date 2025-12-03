@@ -388,8 +388,8 @@ def rasterize_triangle(screen, vertices_2d, color, color_border, texture = None)
                         if texture == None:
                             screen.set_at((x, y), color)
                         else:
-                            t_x = u * v0[3] + v * v1[3] + w * v2[3]
-                            t_y = u * v0[4] + v * v1[4] + w * v2[4]
+                            t_x = 1 - (u * v0[3] + v * v1[3] + w * v2[3])
+                            t_y = 1 - (u * v0[4] + v * v1[4] + w * v2[4])
                             t_x *= texture.get_width()
                             t_y *= texture.get_height()
                             if t_x >= texture.get_width():
