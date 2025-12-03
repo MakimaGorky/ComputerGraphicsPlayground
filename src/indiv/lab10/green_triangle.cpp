@@ -1,12 +1,12 @@
 // SFML 3.0
 
-// c++ green_triangle.cpp -o app -lsfml-window -lsfml-system -lGL - lGLEW && ./app
+// c++ green_triangle.cpp -o app -lsfml-window -lsfml-system -lGL -lGLEW && ./app
 
 #include <bits/stdc++.h>
 #include <GL/glew.h>
 #include <SFML/Window.hpp>
 #include <SFML/OpenGL.hpp>
-// #include <optional>
+
 
 // --- Шейдеры ---
 const char* vertexShaderSource = R"(
@@ -62,9 +62,9 @@ int main() {
         std::cerr << "Failed to initialize GLEW" << std::endl;
         return -1;
     }
-    glGetError(); // Сброс ошибки инициализации GLEW
+    glGetError(); // Обработка ошибки
 
-    // VAO (Обязательно для Core Profile)
+    // VAO (WOW!)
     GLuint VAO;
     glGenVertexArrays(1, &VAO);
     glBindVertexArray(VAO);
@@ -100,10 +100,17 @@ int main() {
     // --- Буферы ---
     GLint posAttrib = glGetAttribLocation(shaderProgram, "position");
 
+    // Если не хочется на весь экраны
+    // float vertices[] = {
+    //      0.0f,  0.5f,
+    //     -0.5f, -0.5f,
+    //      0.5f, -0.5f
+    // };
+
     float vertices[] = {
-         0.0f,  0.5f,
-        -0.5f, -0.5f,
-         0.5f, -0.5f
+         0.0f,  1.0f,
+        -1.0f, -1.0f,
+         1.0f, -1.0f
     };
 
     GLuint VBO;
@@ -140,7 +147,7 @@ int main() {
         window.display();
     }
 
-    // Очистка
+    // Очистка памяти
     glDeleteBuffers(1, &VBO);
     glDeleteVertexArrays(1, &VAO);
     glDeleteProgram(shaderProgram);
