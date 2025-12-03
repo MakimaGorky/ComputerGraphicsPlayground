@@ -4,6 +4,7 @@ from primitives import * # Assume primitives.py provides Point, Polygon, Object,
 import config
 from typing import List, Tuple, Any, Optional
 import os # Добавим os для from_obj
+from camera import *
 
 # --- Вспомогательные функции для матриц (для полноты) ---
 
@@ -24,17 +25,17 @@ class LightSource:
         self.position = np.array(position, dtype=float)
         self.color = np.array(color, dtype=float)
 
-single_light_source = LightSource((300, 300, 300), color=(1, 0, 0))
+single_light_source = LightSource((-300, -300, -300), color=(1, 1, 1))
 
 class LitObject(Object):
-    def __init__(self, polygons: List[Polygon], color=(0.7, 0.7, 0.7), ambient_color=(0.1, 0.1, 0.1), shininess=100.0):
+    def __init__(self, polygons: List[Polygon], color=(0.7, 0.7, 0.7), ambient_color=(0.1, 0.1, 0.1), color_specular=(1.0, 1.0, 1.0), shininess=100.0):
         super().__init__(polygons) 
         
         self.polygons = polygons
         
         # Фонг момент
         self.color_diffuse = np.array(color, dtype=float)
-        self.color_specular = np.array((1.0, 1.0, 1.0), dtype=float)
+        self.color_specular = np.array(color_specular, dtype=float)
         self.color_ambient = np.array(ambient_color, dtype=float)
         self.shininess = shininess
 
@@ -109,28 +110,28 @@ class LitObject(Object):
             self.calculate_face_normal(poly)
         
 
-    def back_face_culling(self, poly: Polygon, view_position: Tuple[float, float, float]) -> bool:
-        """
-        Реализует отсечение нелицевых граней.
-        """
-        if poly.normal is None:
-            return True
+    # def back_face_culling(self, poly: Polygon, view_position: Tuple[float, float, float]) -> bool:
+    #     """
+    #     Реализует отсечение нелицевых граней.
+    #     """
+    #     if poly.normal is None:
+    #         return True
 
-        # 1. Берем преобразованную точку на поверхности (первая вершина)
-        point_on_surface_np = self._transform_point(poly.vertices[0])
+    #     # 1. Берем преобразованную точку на поверхности (первая вершина)
+    #     point_on_surface_np = self._transform_point(poly.vertices[0])
         
-        # 2. Вектор от поверхности к наблюдателю (камере)
-        view_position_np = np.array(view_position, dtype=float)
-        V = view_position_np - point_on_surface_np
-        V = V / np.linalg.norm(V)
+    #     # 2. Вектор от поверхности к наблюдателю (камере)
+    #     view_position_np = np.array(view_position, dtype=float)
+    #     V = view_position_np - point_on_surface_np
+    #     V = V / np.linalg.norm(V)
         
-        # 3. Преобразованная нормаль грани
-        face_normal_np = self._transform_normal(poly.normal)
+    #     # 3. Преобразованная нормаль грани
+    #     face_normal_np = self._transform_normal(poly.normal)
         
-        # 4. Проверка скалярным произведением (N . V < 0 -> отсечь)
-        dot_product = np.dot(face_normal_np, V)
+    #     # 4. Проверка скалярным произведением (N . V < 0 -> отсечь)
+    #     dot_product = np.dot(face_normal_np, V)
         
-        return dot_product < 0
+    #     return dot_product < 0
         
         
     def phong_shading(self, point: np.ndarray, normal: np.ndarray, light_source: LightSource, view_position: np.ndarray) -> np.ndarray:
@@ -175,8 +176,8 @@ class LitObject(Object):
         """
         view_position_np = np.array(view_position, dtype=float)
 
-        if self.back_face_culling(poly, view_position):
-            return None # Грань невидима
+        # if self.back_face_culling(poly, view_position):
+        #     return None # Грань невидима
 
         # 1. Точка на поверхности (центр грани)
         center_point_primitives = poly.get_center()
@@ -194,7 +195,7 @@ class LitObject(Object):
     
     # ... (from_obj метод остается как в последнем предложении, т.к. он уже возвращает LitObject) ...
     @staticmethod
-    def from_obj(filename, color=(0.7, 0.7, 0.7), position=(0,0,0), scale=1.0):
+    def from_obj(filename, color=(0.7, 0.7, 0.7), position=(0,0,0), color_specular=(1.0, 1.0, 1.0), scale=1.0, shininess=100.0):
         # ... (КОД ИЗ ВАШЕГО СНИППЕТА, КОТОРЫЙ ПРАВИЛЬНО СОЗДАЕТ Polygon) ...
         # (Обеспечивает совместимость с LitObject(polygons))
         
@@ -237,7 +238,7 @@ class LitObject(Object):
             return LitObject([])
 
         print(f"Модель {filename} успешно загружена.")
-        return LitObject(polygons, color=color)
+        return LitObject(polygons, color=color, color_specular=color_specular, shininess=shininess)
 
 # main.py (Вставить после основных импортов)
 
@@ -248,7 +249,7 @@ def project_vertex(v: np.ndarray, width: int, height: int) -> Tuple[int, int]:
     
     # Сдвиг Z, чтобы объект был перед камерой (для предотвращения деления на ноль)
     # Если координата Z объекта становится слишком большой, используем фиксированную удаленность
-    dist_z = 1000 
+    dist_z = -camera.z
     
     # Фактор масштабирования (пропорционально глубине)
     # Используем dist_z - z, чтобы при Z=0 фактор был максимальным, при Z=dist_z -> минимальным

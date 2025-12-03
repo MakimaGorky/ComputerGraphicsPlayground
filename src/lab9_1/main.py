@@ -396,7 +396,7 @@ def app():
         if button(screen, font, r_load, "Загрузить") and clicked:
             try:
                 path = os.path.join(models_dir, input_boxes["filename"]+".obj")
-                lit_model = light.LitObject.from_obj(path, color=(0.8, 0.4, 0.4), scale=50.0)
+                lit_model = light.LitObject.from_obj(path, color=(1, 0, 0), color_specular=(1, 1, 1), scale=50.0, shininess=100.0)
                 # main_object = load_obj(path)
                 main_object = lit_model
                 if scene_mode == "single": scene_objects = [main_object]
