@@ -28,10 +28,12 @@ class Rectangle:
 
 
 class Point:
-    def __init__(self, x: float = 0.0, y: float = 0.0, z: float = 0.0):
+    def __init__(self, x: float = 0.0, y: float = 0.0, z: float = 0.0, u: float = 0.0, v: float = 0.0):
         self.x = x
         self.y = y
         self.z = z
+        self.u = u
+        self.v = v
 
     def to_homogeneous(self):
         return np.array([self.x, self.y, self.z, 1.0])
@@ -109,6 +111,55 @@ class Polygon:
             transformed = np.dot(matrix, h)
             vertex.from_homogeneous(transformed)
 
+    def calculate_texture_coordinats(self):
+        """
+        Версия с автоматическим выбором осей для минимизации искажений
+        """
+        # Конвертируем всё в массивы numpy
+        points = np.array([[p.x, p.y, p.z] for p in self.vertices])
+        
+        # Нормализуем нормаль
+        normal = np.array([self.normal.x, self.normal.y, self.normal.z])
+        n = normal / np.linalg.norm(normal)
+        
+        # Центрируем точки
+        center = np.mean(points, axis=0)
+        centered = points - center
+        
+        # Проецируем на плоскость
+        dots = np.dot(centered, n)
+        projected = centered - dots.reshape(-1, 1) * n
+        
+        # Находим главные оси через SVD (минимизация искажений)
+        _, _, Vt = np.linalg.svd(projected)
+        
+        # Базисные векторы плоскости
+        u_axis, v_axis = Vt[0], Vt[1]
+        
+        # Проецируем
+        uv_array = projected @ np.column_stack([u_axis, v_axis])
+        
+        # Нормализуем к [0, 1]
+        min_uv = np.min(uv_array, axis=0)
+        max_uv = np.max(uv_array, axis=0)
+        
+        result = []
+        for i in range(len(points)):
+            u_val, v_val = uv_array[i]
+            
+            u_norm = 0.5 if abs(max_uv[0] - min_uv[0]) < 1e-9 else (u_val - min_uv[0]) / (max_uv[0] - min_uv[0])
+            v_norm = 0.5 if abs(max_uv[1] - min_uv[1]) < 1e-9 else (v_val - min_uv[1]) / (max_uv[1] - min_uv[1])
+            
+            u_norm = max(0.0, min(1.0, u_norm))
+            v_norm = max(0.0, min(1.0, v_norm))
+            
+            result.append((float(u_norm), float(v_norm)))
+        
+        for i in range(len(self.vertices)):
+            self.vertices[i].u = result[i][0]
+            self.vertices[i].v = result[i][1]
+        return
+
     def __len__(self):
         return len(self.vertices)
 
@@ -121,6 +172,7 @@ class Polygon:
 class Object:
     def __init__(self, polies: List[Polygon] = []):
         self.polygons = polies.copy()
+        self.texture = None;
 
     def add_face(self, p: Polygon):
         self.polygons.append(p)
@@ -151,6 +203,10 @@ class Object:
             h = vertex.to_homogeneous()
             transformed = np.dot(matrix, h)
             vertex.from_homogeneous(transformed)
+
+    def calculate_texture_coordinats(self):
+        for poly in self.polygons:
+            poly.calculate_texture_coordinats()
 
 
     def __len__(self):
