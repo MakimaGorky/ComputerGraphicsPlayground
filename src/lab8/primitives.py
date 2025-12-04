@@ -170,9 +170,10 @@ class Polygon:
         return self.vertices[index]
 
 class Object:
-    def __init__(self, polies: List[Polygon] = []):
+    def __init__(self, polies: List[Polygon] = [], has_uv: bool = False):
         self.polygons = polies.copy()
         self.texture = None;
+        self.has_uv_coordinats = has_uv
 
     def add_face(self, p: Polygon):
         self.polygons.append(p)
@@ -205,6 +206,7 @@ class Object:
             vertex.from_homogeneous(transformed)
 
     def calculate_texture_coordinats(self):
+        self.has_uv_coordinats = True
         for poly in self.polygons:
             poly.calculate_texture_coordinats()
 

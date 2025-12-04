@@ -265,7 +265,8 @@ def app():
                 new_obj.apply_transformation(translation_matrix(dx, dy, 0))
                 for p in new_obj.polygons:
                     p.calculate_normal(new_obj.get_center())
-                # new_obj.calculate_texture_coordinats()
+                if not new_obj.has_uv_coordinats:
+                    new_obj.calculate_texture_coordinats()
                 new_obj.texture = main_object.texture
                 scene_objects.append(new_obj)
 
@@ -426,7 +427,8 @@ def app():
             # try:
                 path = os.path.join(textures_dir, input_boxes["texturename"])
                 main_object.texture = pygame.image.load(path).convert_alpha()
-                # main_object.calculate_texture_coordinats()
+                if not main_object.has_uv_coordinats:
+                    main_object.calculate_texture_coordinats()
             # except: print("Error loading")
 
         # ==================================================

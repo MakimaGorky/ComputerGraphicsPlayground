@@ -19,6 +19,8 @@ def load_obj(filename: str) -> Object:
     # Используем константу масштабирования из файла конфигурации для приведения модели к общему размеру
     scale = config.OBJ_SCALE
 
+    has_uv_coordinats = False
+
     try:
         with open(filename, 'r') as f:
             for line in f:
@@ -30,6 +32,8 @@ def load_obj(filename: str) -> Object:
                     # Масштабируем вершину при загрузке
                     vertices.append(Point(x * scale, -y * scale, z * scale))
                 elif line.startswith('vt '):
+                    if not has_uv_coordinats:
+                        has_uv_coordinats = True
                     parts = line.strip().split()
                     u, v = map(float, parts[1:3])
                     uv_coords.append([u, v])
@@ -60,7 +64,7 @@ def load_obj(filename: str) -> Object:
         return Object()
 
     print(f"Модель {filename} успешно загружена.")
-    return Object(polygons)
+    return Object(polygons, has_uv_coordinats)
 
 
 def save_obj(obj: Object, filename: str):

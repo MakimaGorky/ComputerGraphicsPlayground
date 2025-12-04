@@ -397,9 +397,9 @@ def rasterize_triangle(screen, vertices_2d, color, color_border, texture = None)
                             if t_y >= texture.get_height():
                                 t_y -= 1;
                             if t_x < 0:
-                                t_x = 0;
+                                t_x = np.float64(0);
                             if t_y < 0:
-                                t_y = 0;
+                                t_y = np.float64(0);
                             t_color = texture.get_at((t_x.astype(int), t_y.astype(int)))
                             screen.set_at((x, y), t_color)
 
