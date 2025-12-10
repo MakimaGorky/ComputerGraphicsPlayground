@@ -1,0 +1,72 @@
+{
+  "format": 1,
+  "restore": {
+    "/home/riku/Documents/uni/graphics/ComputerGraphicsPlayground/src/indiv/I2/RayTracerCS/RayTracerCS.csproj": {}
+  },
+  "projects": {
+    "/home/riku/Documents/uni/graphics/ComputerGraphicsPlayground/src/indiv/I2/RayTracerCS/RayTracerCS.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "/home/riku/Documents/uni/graphics/ComputerGraphicsPlayground/src/indiv/I2/RayTracerCS/RayTracerCS.csproj",
+        "projectName": "RayTracerCS",
+        "projectPath": "/home/riku/Documents/uni/graphics/ComputerGraphicsPlayground/src/indiv/I2/RayTracerCS/RayTracerCS.csproj",
+        "packagesPath": "/home/riku/.nuget/packages/",
+        "outputPath": "/home/riku/Documents/uni/graphics/ComputerGraphicsPlayground/src/indiv/I2/RayTracerCS/obj/",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "/home/riku/.nuget/NuGet/NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net8.0"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net8.0": {
+            "targetAlias": "net8.0",
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        }
+      },
+      "frameworks": {
+        "net8.0": {
+          "targetAlias": "net8.0",
+          "dependencies": {
+            "Raylib-cs": {
+              "target": "Package",
+              "version": "[7.0.2, )"
+            }
+          },
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "/home/riku/Applications/dotnet-8/sdk/8.0.414/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    }
+  }
+}
