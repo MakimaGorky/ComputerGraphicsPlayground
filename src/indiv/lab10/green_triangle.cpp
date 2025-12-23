@@ -13,7 +13,14 @@ const char* vertexShaderSource = R"(
     #version 330 core
     in vec2 position;
     void main() {
-        gl_Position = vec4(position, 0.0, 1.0);
+        float angle = 3.1415 / 2;
+        mat2 rm = mat2(
+            cos(angle), -sin(angle),
+            sin(angle), cos(angle)
+        );
+
+        vec2 posit = position * rm;
+        gl_Position = vec4(posit, 0.0, 1.0);
     }
 )";
 
@@ -99,13 +106,6 @@ int main() {
 
     // --- Буферы ---
     GLint posAttrib = glGetAttribLocation(shaderProgram, "position");
-
-    // Если не хочется на весь экраны
-    // float vertices[] = {
-    //      0.0f,  0.5f,
-    //     -0.5f, -0.5f,
-    //      0.5f, -0.5f
-    // };
 
     float vertices[] = {
          0.0f,  1.0f,

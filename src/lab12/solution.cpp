@@ -51,22 +51,16 @@ const char* fragmentShaderSource = R"(
             FragColor = vec4(ourColor, 1.0);
         }
         else if (mode == 1) {
-            // Куб с текстурой и цветом
             vec4 texCol = texture(texture1, TexCoord);
-            // Смешиваем цвет текстуры с цветом вершины (или фиксированным цветом)
-            // mixRatio здесь регулирует "силу" наложения цвета поверх текстуры
             // Допустим, 0 - чистая текстура, 1 - чистый цвет (или умножение)
             // Для задачи сделаем интерполяцию
             FragColor = mix(texCol, texCol * vec4(ourColor, 1.0), mixRatio);
         }
         else if (mode == 2) {
-            // Куб с двумя текстурами
             FragColor = mix(texture(texture1, TexCoord), texture(texture2, TexCoord), mixRatio);
         }
     }
 )";
-
-// --- Помощники ---
 
 // Функция для компиляции шейдеров
 GLuint createShaderProgram() {
@@ -118,14 +112,14 @@ void hsv2rgb(float h, float s, float v, float& r, float& g, float& b) {
     r += m; g += m; b += m;
 }
 
-// Генерация текстуры (шахматная)
+// Генерация шахмат
 GLuint generateTexture1() {
     sf::Image img;
-    img.resize({256, 256}); // SFML 3.0: resize вместо create
+    img.resize({256, 256});
     for(unsigned int x=0; x<256; x++) {
         for(unsigned int y=0; y<256; y++) {
             bool white = ((x / 32) + (y / 32)) % 2 == 0;
-            img.setPixel({x, y}, white ? sf::Color::White : sf::Color::Blue); // SFML 3.0: Vector2u
+            img.setPixel({x, y}, white ? sf::Color::White : sf::Color::Blue);
         }
     }
     GLuint texID;
@@ -141,11 +135,11 @@ GLuint generateTexture1() {
 // Генерация текстуры (полоски)
 GLuint generateTexture2() {
     sf::Image img;
-    img.resize({256, 256}); // SFML 3.0: resize вместо create
+    img.resize({256, 256});
     for(unsigned int x=0; x<256; x++) {
         for(unsigned int y=0; y<256; y++) {
             sf::Color col = (x % 32 < 16) ? sf::Color::Red : sf::Color::Yellow;
-            img.setPixel({x, y}, col); // SFML 3.0: Vector2u
+            img.setPixel({x, y}, col);
         }
     }
     GLuint texID;
@@ -164,7 +158,6 @@ int main() {
     settings.majorVersion = 3;
     settings.minorVersion = 3;
 
-    // SFML 3.0: конструктор изменился
     sf::Window window(sf::VideoMode({800, 800}), "OpenGL Tasks: Tetra, Cubes, Circle", sf::Style::Default, sf::State::Windowed, settings);
     window.setFramerateLimit(60);
 
@@ -180,27 +173,24 @@ int main() {
     GLuint tex1 = generateTexture1();
     GLuint tex2 = generateTexture2();
 
-    // --- Данные геометрии ---
 
     // 1. Тетраэдр (Вершины + Цвета)
     float tetraVertices[] = {
-        // Pos (x,y,z)       // Color (r,g,b)   // UV (unused)
-         0.0f,  0.5f,  0.0f,  1.0f, 0.0f, 0.0f,  0.0f, 0.0f, // Top
-        -0.5f, -0.5f,  0.5f,  0.0f, 1.0f, 0.0f,  0.0f, 0.0f, // Front Left
-         0.5f, -0.5f,  0.5f,  0.0f, 0.0f, 1.0f,  0.0f, 0.0f, // Front Right
-         0.0f, -0.5f, -0.5f,  1.0f, 1.0f, 0.0f,  0.0f, 0.0f  // Back
+         0.0f,  0.5f,  0.0f,  1.0f, 0.0f, 0.0f,  0.0f, 0.0f,
+        -0.5f, -0.5f,  0.5f,  0.0f, 1.0f, 0.0f,  0.0f, 0.0f,
+         0.5f, -0.5f,  0.5f,  0.0f, 0.0f, 1.0f,  0.0f, 0.0f,
+         0.0f, -0.5f, -0.5f,  1.0f, 1.0f, 0.0f,  0.0f, 0.0f
     };
     // Индексы для отрисовки 4 треугольников
     unsigned int tetraIndices[] = {
-        0, 1, 2, // Front
-        0, 2, 3, // Right
-        0, 3, 1, // Left
-        1, 3, 2  // Bottom
+        0, 1, 2,
+        0, 2, 3,
+        0, 3, 1,
+        1, 3, 2
     };
 
     // 2. Куб (Вершины + Цвета + UV)
     float cubeVertices[] = {
-        // Positions          // Colors (для смешивания) // Texture Coords
         -0.5f, -0.5f, -0.5f,  1.0f, 0.0f, 0.0f,  0.0f, 0.0f,
          0.5f, -0.5f, -0.5f,  0.0f, 1.0f, 0.0f,  1.0f, 0.0f,
          0.5f,  0.5f, -0.5f,  0.0f, 0.0f, 1.0f,  1.0f, 1.0f,
@@ -244,7 +234,7 @@ int main() {
         -0.5f,  0.5f, -0.5f,  1.0f, 0.0f, 0.0f,  0.0f, 1.0f
     };
 
-    // 3. Круг (Triangle Fan)
+    // 3. Круг
     std::vector<float> circleVertices;
     // Центр (белый)
     circleVertices.insert(circleVertices.end(), {0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 0.5f, 0.5f});
@@ -256,7 +246,7 @@ int main() {
         float y = sin(rad) * 0.5f;
 
         float r, g, b;
-        hsv2rgb(angle, 1.0f, 1.0f, r, g, b); // Цвет по Hue
+        hsv2rgb(angle, 1.0f, 1.0f, r, g, b);
 
         circleVertices.push_back(x);
         circleVertices.push_back(y);
@@ -266,7 +256,7 @@ int main() {
         circleVertices.push_back(g);
         circleVertices.push_back(b);
 
-        circleVertices.push_back(0.0f); // UV dummy
+        circleVertices.push_back(0.0f);
         circleVertices.push_back(0.0f);
     }
 
@@ -309,7 +299,7 @@ int main() {
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
 
-    // --- Переменные состояния ---
+    // Переменные состояния
     glm::vec3 tetraPos(0.0f, 0.0f, -3.0f);
     float colorMix = 0.5f;
     float texMix = 0.5f;
@@ -317,15 +307,12 @@ int main() {
 
     bool running = true;
     while (running) {
-        // SFML 3.0: pollEvent возвращает optional
         while (std::optional<sf::Event> event = window.pollEvent()) {
             if (event->is<sf::Event::Closed>()) {
                 running = false;
             }
         }
 
-        // --- Обработка ввода ---
-        // SFML 3.0: используем Key::
         // 1. Тетраэдр (Стрелки)
         if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Left)) tetraPos.x -= 0.05f;
         if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Right)) tetraPos.x += 0.05f;
@@ -392,7 +379,7 @@ int main() {
 
         // --- 2. Top-Right: Куб с текстурой и цветом ---
         glViewport(w/2, h/2, w/2, h/2);
-        glUniform1i(modeLoc, 1); // Текстура + Цвет
+        glUniform1i(modeLoc, 1);
         glUniform1f(mixLoc, colorMix);
 
         model = glm::mat4(1.0f);
@@ -406,7 +393,7 @@ int main() {
 
         // --- 3. Bottom-Left: Градиентный круг ---
         glViewport(0, 0, w/2, h/2);
-        glUniform1i(modeLoc, 0); // Градиент
+        glUniform1i(modeLoc, 0);
 
         model = glm::mat4(1.0f);
         model = glm::translate(model, glm::vec3(0.0f, 0.0f, -2.0f));
@@ -419,7 +406,7 @@ int main() {
 
         // --- 4. Bottom-Right: Куб 2 текстуры ---
         glViewport(w/2, 0, w/2, h/2);
-        glUniform1i(modeLoc, 2); // Смесь текстур
+        glUniform1i(modeLoc, 2);
         glUniform1f(mixLoc, texMix);
 
         model = glm::mat4(1.0f);
