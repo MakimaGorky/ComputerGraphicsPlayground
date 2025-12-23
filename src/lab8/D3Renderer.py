@@ -7,6 +7,7 @@ from transformations import *
 from primitives import *
 from UI import *
 from camera import *
+# from z_buffer_renderer import render_poly_zbuffer
 
 
 WIDTH = 0
@@ -27,14 +28,15 @@ def get_view_matrix():
     return view_matrix
 
 class PolygonProjection:
-    def __init__(self, points: List[Tuple[float, float]] = [], depth: float = 0.0):
+    def __init__(self, points: List[List[float]] = [], depth: float = 0.0):
         self.vertices = points.copy()
         self.color = config.BLUE
         self.depth = depth  # Средняя глубина полигона для Z-буфера
         self.center_2d = None  # Для рисования нормали
         self.normal_end_2d = None  # Конец вектора нормали в 2D
+        self.texture = None;
 
-    def add_vertex(self, point: Tuple[float, float]):
+    def add_vertex(self, point: List[float]):
         self.vertices.append(point)
 
     def draw(self, screen, show_faces: bool = True, show_wireframe: bool = True):
@@ -53,11 +55,14 @@ class PolygonProjection:
 
         # Рисуем заливку граней
         if show_faces:
-            fill_color = (max(0, self.color[0]-100), max(0, self.color[1]-100), max(0, self.color[2]-100))
-            pygame.draw.polygon(screen, fill_color, int_vertices)
+            # fill_color = (max(0, self.color[0]-100), max(0, self.color[1]-100), max(0, self.color[2]-100))
+            ##todo: заменить на отрисовку z-bufferом
+            render_poly_zbuffer(screen, self, self.texture)
+            ##pygame.draw.polygon(screen, fill_color, int_vertices)
 
         # Рисуем каркас (рёбра)
         if show_wireframe:
+            ##todo: заменить на отрисовку z-bufferом
             pygame.draw.polygon(screen, self.color, int_vertices, config.LINE_WIDTH)
 
     def draw_normal(self, screen, color: Tuple[int, int, int] = (255, 0, 0)):
@@ -96,6 +101,8 @@ class PolygonProjection:
 
                 pygame.draw.line(screen, color, end_pos, (int(left_x), int(left_y)), 2)
                 pygame.draw.line(screen, color, end_pos, (int(right_x), int(right_y)), 2)
+    def __len__(self):
+        return len(self.vertices)
 
 
 def render_point(vertex: Point, method: str, window: WindowInfo):
@@ -141,7 +148,7 @@ def render_point(vertex: Point, method: str, window: WindowInfo):
         y_normalized = projected_vertex[1] / projected_vertex[3]
         screen_x = x_normalized + window.center.x
         screen_y = y_normalized + window.center.y
-        return (screen_x, screen_y, depth)
+        return [screen_x, screen_y, depth, vertex.u, vertex.v]
 
     return None
 
@@ -155,7 +162,7 @@ def render_polygon(poly: Polygon, method: str, window: WindowInfo):
         p = render_point(v, method, window)
         if p is None:
             return None
-        pp.add_vertex((p[0], p[1]))
+        pp.add_vertex((p[0], p[1], p[2], p[3], p[4]))
         depths.append(p[2])
 
     # Вычисляем среднюю глубину полигона для Z-буфера
@@ -240,7 +247,8 @@ def render_object(obj: Object, method: str, window: WindowInfo, use_zbuffer: boo
                 polygons_to_render.append(rendered_poly)
 
     if use_zbuffer:
-        polygons_to_render.sort(key=lambda x: x.depth, reverse=True)
+        # polygons_to_render.sort(key=lambda x: x.depth, reverse=True)
+        polygons_to_render.sort(key=lambda x: x.depth, reverse=False)
         projected_obj = polygons_to_render
     else:
         # Если Z-буфер выключен, сортируем просто по дальности (Painter's algo)
@@ -289,6 +297,121 @@ def render_multiple_objects(objects: List[Object], method: str, window: WindowIn
             # ====================
 
     if use_zbuffer:
-        all_polygons.sort(key=lambda x: x.depth, reverse=True)
+        #all_polygons.sort(key=lambda x: x.depth, reverse=True)
+        all_polygons.sort(key=lambda x: x.depth, reverse=False)
 
     return all_polygons
+
+
+    #============ Проблемы с зависимостями, Z-buffer будет здесь
+
+# Глобальный Z-буфер
+z_buffer = None
+WIDTH, HEIGHT = 0, 0
+
+def init_z_buffer(width, height):
+    """Инициализирует Z-буфер."""
+    global z_buffer, WIDTH, HEIGHT
+    WIDTH, HEIGHT = width, height
+    z_buffer = np.full((width, height), np.inf, dtype=float)
+
+def clear_z_buffer():
+    """Очищает Z-буфер перед каждым кадром."""
+    if z_buffer is not None:
+        z_buffer.fill(np.inf)
+
+# Вычислять каждый раз - медленно. Переношу в rasterize_triangle
+def barycentric_coords(p, a, b, c):
+    """Вычисляет барицентрические координаты точки p относительно треугольника a, b, c."""
+    vec_ab = (b[0] - a[0], b[1] - a[1])
+    vec_ac = (c[0] - a[0], c[1] - a[1])
+    vec_ap = (p[0] - a[0], p[1] - a[1])
+
+    d00 = vec_ab[0] * vec_ab[0] + vec_ab[1] * vec_ab[1]
+    d01 = vec_ab[0] * vec_ac[0] + vec_ab[1] * vec_ac[1]
+    d11 = vec_ac[0] * vec_ac[0] + vec_ac[1] * vec_ac[1]
+    d20 = vec_ap[0] * vec_ab[0] + vec_ap[1] * vec_ab[1]
+    d21 = vec_ap[0] * vec_ac[0] + vec_ap[1] * vec_ac[1]
+
+    denom = d00 * d11 - d01 * d01
+    if abs(denom) < 1e-5:
+        return -1, -1, -1
+
+    v = (d11 * d20 - d01 * d21) / denom
+    w = (d00 * d21 - d01 * d20) / denom
+    u = 1.0 - v - w
+    return u, v, w
+
+# rasterize_triangle без необходимости в трёхмерном полигоне (у вершин уже есть depth)
+def rasterize_triangle(screen, vertices_2d, color, color_border, texture = None):
+    """Растеризует треугольник и обновляет Z-буфер."""
+    v0 = vertices_2d.vertices[0]
+    v1 = vertices_2d.vertices[1]
+    v2 = vertices_2d.vertices[2]
+
+    # Ограничивающий прямоугольник треугольника
+    min_x = max(0, int(min(v0[0], v1[0], v2[0])))
+    max_x = min(WIDTH - 1, int(max(v0[0], v1[0], v2[0])))
+    min_y = max(0, int(min(v0[1], v1[1], v2[1])))
+    max_y = min(HEIGHT - 1, int(max(v0[1], v1[1], v2[1])))
+
+
+    vec_ab = (v1[0] - v0[0], v1[1] - v0[1])
+    vec_ac = (v2[0] - v0[0], v2[1] - v0[1])
+    d00 = vec_ab[0] * vec_ab[0] + vec_ab[1] * vec_ab[1]
+    d01 = vec_ab[0] * vec_ac[0] + vec_ab[1] * vec_ac[1]
+    d11 = vec_ac[0] * vec_ac[0] + vec_ac[1] * vec_ac[1]
+    for x in range(min_x, max_x + 1):
+        for y in range(min_y, max_y + 1):
+            vec_ap = (x - v0[0], y - v0[1])
+            d20 = vec_ap[0] * vec_ab[0] + vec_ap[1] * vec_ab[1]
+            d21 = vec_ap[0] * vec_ac[0] + vec_ap[1] * vec_ac[1]
+
+            denom = d00 * d11 - d01 * d01
+            if abs(denom) < 1e-5:
+                v, w, u = -1, -1, -1
+
+            v = (d11 * d20 - d01 * d21) / denom
+            w = (d00 * d21 - d01 * d20) / denom
+            u = 1.0 - v - w
+            # u, v, w = barycentric_coords((x, y), v0, v1, v2)
+
+            if u >= 0 and v >= 0 and w >= 0:
+                # Интерполяция Z-координаты
+                z = u * v0[2] + v * v1[2] + w * v2[2]
+
+                if z < z_buffer[x, y]:
+                    z_buffer[x, y] = z
+                    if u < 2e-2 or v< 2e-2 or w< 2e-2:
+                        screen.set_at((x, y), color_border)
+                    else: 
+                        if texture == None:
+                            screen.set_at((x, y), color)
+                        else:
+                            t_x = 1 - (u * v0[3] + v * v1[3] + w * v2[3])
+                            t_y = 1 - (u * v0[4] + v * v1[4] + w * v2[4])
+                            t_x *= texture.get_width()
+                            t_y *= texture.get_height()
+                            if t_x >= texture.get_width():
+                                t_x -= 1;
+                            if t_y >= texture.get_height():
+                                t_y -= 1;
+                            if t_x < 0:
+                                t_x = np.float64(0);
+                            if t_y < 0:
+                                t_y = np.float64(0);
+                            t_color = texture.get_at((t_x.astype(int), t_y.astype(int)))
+                            screen.set_at((x, y), t_color)
+
+def render_poly_zbuffer(screen, poly, texture = None):
+    polys = []
+    if len(poly) > 3:
+        for i in range(len(poly) - 2):
+            pp = PolygonProjection([poly.vertices[0], poly.vertices[i + 1], poly.vertices[i + 2]])
+            pp.depth = (poly.vertices[0][2] + poly.vertices[i + 1][2] + poly.vertices[i + 2][2]) / 3;
+            polys.append(pp)
+    else:
+        polys = [poly] 
+
+    for p in polys:
+        rasterize_triangle(screen, p, (0, 0, 255), (0, 0, 0), texture)

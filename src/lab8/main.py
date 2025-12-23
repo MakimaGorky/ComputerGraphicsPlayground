@@ -14,6 +14,7 @@ from camera import *
 from UI import *
 from plot import Plot
 from rotation_shape import *
+# from z_buffer_renderer import *
 
 # ==========================================
 # КОНФИГУРАЦИЯ ИНТЕРФЕЙСА
@@ -43,7 +44,8 @@ input_boxes = {
     "plot_n": "40",
     "rot_profile": "(50,0) (80,50) (80,100) (0,150)",
     "rot_iter": "16",
-    "filename": "model"
+    "filename": "model",
+    "texturename": "texture_1.png"
 }
 active_input = None
 
@@ -110,10 +112,15 @@ def app():
     current_dir = os.path.dirname(os.path.abspath(__file__))
     models_dir = os.path.join(current_dir, 'models')
     if not os.path.exists(models_dir): os.makedirs(models_dir)
+    
+    textures_dir = os.path.join(current_dir, 'textures')
+    if not os.path.exists(textures_dir): os.makedirs(textures_dir)
 
     pygame.init()
     screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
     pygame.display.set_caption("3D Renderer Studio")
+
+    init_z_buffer(WINDOW_WIDTH, WINDOW_HEIGHT)
 
     font = pygame.font.Font(None, 24)
     header_font = pygame.font.Font(None, 30)
@@ -147,7 +154,7 @@ def app():
     settings = {
         "zbuffer": True,
         "faces": True,
-        "wireframe": True,
+        "wireframe": False,
         "normals": False,
         "rotate": True
     }
@@ -197,6 +204,9 @@ def app():
         # 4. Рендеринг 3D сцены
         to_render = [o for o in (scene_objects if scene_mode == "multiple" else [main_object]) if o is not None]
 
+        # 5. Чистим z-buffer
+        clear_z_buffer()
+
         # Используем функции рендеринга
         # (Они рисуют прямо на screen)
         render_func = render_multiple_objects if scene_mode == "multiple" else render_object
@@ -210,6 +220,7 @@ def app():
 
         if rendered_polys:
             for poly in rendered_polys:
+                poly.texture = main_object.texture
                 poly.draw(screen, settings["faces"], settings["wireframe"])
                 if settings["normals"]: poly.draw_normal(screen)
 
@@ -252,6 +263,11 @@ def app():
                 # Случайное смещение, чтобы видно было новый объект
                 dx, dy = random.randint(-200, 200), random.randint(-150, 150)
                 new_obj.apply_transformation(translation_matrix(dx, dy, 0))
+                for p in new_obj.polygons:
+                    p.calculate_normal(new_obj.get_center())
+                if not new_obj.has_uv_coordinats:
+                    new_obj.calculate_texture_coordinats()
+                new_obj.texture = main_object.texture
                 scene_objects.append(new_obj)
 
         if button(screen, font, r_clr, "Очист.") and clicked:
@@ -390,16 +406,30 @@ def app():
         r_fn, r_load, r_save = layout.split_row([1.5, 0.8, 0.8])
         if handle_input_ui(r_fn, "filename"): active_input = "filename"
         if button(screen, font, r_load, "Загрузить") and clicked:
-            try:
+            # try:
                 path = os.path.join(models_dir, input_boxes["filename"]+".obj")
+                texture = main_object.texture
                 main_object = load_obj(path)
+                main_object.texture = texture
                 if scene_mode == "single": scene_objects = [main_object]
-            except: print("Error loading")
+            # except: print("Error loading")
         if button(screen, font, r_save, "Сохр.") and clicked:
             try:
                 path = os.path.join(models_dir, f"saved_{datetime.now().strftime('%H%M%S')}.obj")
                 save_obj(main_object, path)
             except: pass
+        layout.add_spacer(15)
+
+        # --- Texture I/O ---
+        r_fn, r_load, r_save = layout.split_row([1.5, 0.8, 0.8])
+        if handle_input_ui(r_fn, "texturename"): active_input = "texturename"
+        if button(screen, font, r_load, "Загрузить") and clicked:
+            # try:
+                path = os.path.join(textures_dir, input_boxes["texturename"])
+                main_object.texture = pygame.image.load(path).convert_alpha()
+                if not main_object.has_uv_coordinats:
+                    main_object.calculate_texture_coordinats()
+            # except: print("Error loading")
 
         # ==================================================
         # ОТРИСОВКА ВСПЛЫВАЮЩИХ ОКОН (OVERLAY)
