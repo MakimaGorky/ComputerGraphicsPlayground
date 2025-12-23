@@ -1,4 +1,4 @@
 *.idea
 *.pyc
 *.o
-*/obj/
+**/obj/**
