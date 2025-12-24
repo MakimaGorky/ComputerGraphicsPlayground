@@ -1,0 +1,116 @@
+Это абсолютно правильное решение. 3D-графика — это сложная область, где ошибка в одной строчке шейдера или матрицы может привести к черному экрану без ошибок в консоли. Делать "Big Bang" (писать всё сразу) — верный путь к провалу.
+
+Мы будем использовать стратегию **"Итеративного наращивания"**. Мы начнем с минимального работающего ядра и будем наслаивать фичи.
+
+**Важно:** Каждый следующий промпт подразумевает, что вы отправляете нейросети код, полученный на предыдущем этапе, со словами "Вот мой текущий код...".
+
+Вот план разбиения на 5 этапов (промптов).
+
+---
+
+### Общая архитектура (держать в уме)
+Чтобы избежать спагетти-кода, мы сразу зададим жесткую структуру классов, которую нейросеть должна соблюдать с первого шага:
+1.  `App`: Главный класс, инициализация PyGame, Main Loop.
+2.  `Shader`: Класс-обертка для компиляции GLSL.
+3.  `Mesh`: Класс для хранения VBO/VAO.
+4.  `Camera`: Математика матриц (View/Projection).
+5.  `Scene`: Хранение объектов.
+
+---
+
+### Этап 1: "Hello Cube" — Ядро движка
+**Цель:** Запустить окно, настроить контекст OpenGL и вывести хотя бы один вращающийся куб. Это проверит, что шейдеры компилируются, а VBO работают.
+
+**Prompt 1 (The Core):**
+**Role:** You are a Graphics Engineer. We are building a custom 3D engine in Python using **PyOpenGL**, **PyGame**, and **NumPy** from scratch.
+ **Goal:** Create the basic engine skeleton.
+1.  **Initialize:** Setup a PyGame window with an OpenGL context.
+2.  **Architecture:** Create three classes:
+    *   `Shader`: Handles loading and compiling Vertex and Fragment shaders.
+    *   `Mesh`: Accepts a list of vertices/indices and creates VBO and VAO.
+    *   `App`: Contains the main loop.
+3.  **Content:** Create a simple colorful Cube (geometry data).
+4.  **Math:** Use **NumPy** to create a simple Model Matrix that rotates the cube every frame.
+5.  **Rendering:** Use Modern OpenGL (Core Profile). No `glBegin`/`glEnd`.
+**Output:** A single runnable Python script showing a rotating cube on a black background.
+
+---
+
+### Этап 2: Камера и Матрицы
+**Цель:** Добавить возможность летать вокруг куба. Это создаст базу для управления дирижаблем.
+
+**Prompt 2 (Camera & Input):**
+**Context:** I have a basic PyOpenGL rendering loop (rotating cube).
+**Task:** Implement a 3D Camera system and input handling.
+ 1.  **New Class `Camera`:**
+    *   Attributes: Position (vec3), Yaw/Pitch angles.
+    *   Methods: `get_view_matrix()` (using LookAt logic) and `get_projection_matrix()` (Perspective). Implement the math using **NumPy**.
+2.  **Integration:** Pass View and Projection matrices to the Shader as uniforms.
+3.  **Input:** Modify the `App` class to handle `WASD` keys to move the camera and Mouse movement to look around.
+**Instruction:** Update the existing code to include the Camera class and allow me to fly around the cube.
+
+---
+
+### Этап 3: Освещение (Phong + Spotlight) — Самый сложный этап
+**Цель:** Реализовать физику света *до* того, как мы наплодим кучу объектов. Если свет работает на одном кубе, он заработает и на тысяче.
+
+**Prompt 3 (Lighting Model):**
+**Context:** We have a 3D viewer with a camera.
+**Task:** Upgrade the Shaders to support advanced lighting (Blinn-Phong).
+1.  **Geometry:** Update the `Mesh` class to accept **Normals** for lighting calculations. Update the Cube data to include normals.
+2.  **Shader Upgrade:**
+    *   Implement **Directional Light** (Sun).
+    *   Implement **Spotlight** (Flashlight effect). It needs `position`, `direction`, `cutOff`, and `outerCutOff` uniforms.
+    *   Implement Material properties (`diffuseColor`, `specular`).
+3.  **Logic:**
+    *   Make the Spotlight stick to the Camera position (as if it's a flashlight for now).
+    *   Make the Cube rotate on a floor (add a simple Plane mesh below it) to see the spotlight effect clearly.
+**Constraint:** Do not break the existing Architecture. Just extend the `Shader` and `Mesh` classes.
+
+---
+
+### Этап 4: Процедурная генерация и Инстансинг
+**Цель:** Убрать тестовый куб и создать мир (Террейн, Домики, Елки). Тут мы внедряем оптимизацию.
+
+**Prompt 4 (World Generation & Instancing):**
+**Context:** We have a lit scene.
+**Task:** Generate the game world and optimize rendering.
+1.  **Procedural Mesh Generation:**
+    *   Write functions to generate geometry data (vertices + normals) for: `Sphere`, `Cone`, and `Terrain` (grid with height based on simple noise/sin-cos).
+2.  **Optimization (Instancing):**
+    *   We need to render many trees and houses.
+    *   Modify the `Mesh` class or create a `Renderer` class to support `glDrawArraysInstanced`.
+    *   Use an **Instance VBO** (Attribute Divisor) to pass Model Matrices for multiple objects in one draw call.
+3.  **Scene Setup:**
+    *   Generate a Terrain.
+    *   Scatter 20 "Trees" (Cone+Cylinder) and 10 "Houses" (Cube+Pyramid) randomly.
+**Output:** Updated code where the single cube is replaced by a generated landscape using Instanced Rendering for performance.
+
+---
+
+### Этап 5: Геймплей и Дирижабль
+**Цель:** Собрать игру. Добавить дирижабль, привязать к нему камеру и свет, добавить логику игры.
+
+**Prompt 5 (Gameplay & Airship):**
+**Context:** We have an optimized terrain renderer.
+**Task:** Implement the Airship mechanics and final visual effects.
+1.  **Player (Airship):**
+    *   Create an Airship object (Sphere balloon + Cube gondola).
+    *   **Controls:** Change input so WASD moves the *Airship*, not the Camera.
+    *   **Camera:** Implement "Third Person Follow" logic (Camera smoothly follows the Airship).
+    *   **Spotlight:** Attach the Spotlight to the Airship (pointing down).
+2.  **Clouds & Effects:**
+    *   Add floating spheres (Clouds) in the sky.
+    *   Enable `glBlend` for transparency.
+    *   **Logic:** Make clouds randomly flash (change Emissive color) to simulate lightning.
+3.  **Mechanics:**
+    *   Pressing `Space` drops a "Package" (Cube) from the Airship. Handle simple gravity for the package in Python.
+**Output:** The final game code combining all previous features.
+
+---
+
+### Как работать с этим:
+1.  Отправляете **Prompt 1**.
+2.  Копируете код, запускаете. Если есть ошибки — кидаете текст ошибки нейросети в этот же чат.
+3.  Когда код работает (крутится куб), пишете: *"Great, here is the working code: [Вставить код]. Now let's move to the next step."* и копируете **Prompt 2**.
+4.  Повторять до победного.
