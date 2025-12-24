@@ -74,6 +74,7 @@ class Engine:
         self.tex_white = Texture(None, gen_color=(255, 255, 255))
         # self.tex_window = Texture(None, gen_color=(255, 255, 0)) # Yellow windows
         self.tex_window_emissive = self.create_window()
+        self.tex_christmas_tree = Texture("assets/tree_texture.jpg", gen_color=(10, 80, 10))
 
         print("Baking house lightmap...")
         house_lightmap_array = TextureUtils.create_house_lightmap()
@@ -135,6 +136,9 @@ class Engine:
 
         str_v, str_i = GeometryUtils.generate_single_string(2.0)
         self.string_mesh = Mesh(str_v, str_i)
+
+        ct_v, ct_i = GeometryUtils.load_obj("assets/tree.obj", swap_yz=True)
+        self.christmas_tree_mesh = Mesh(ct_v, ct_i)
 
     def setup_npcs(self):
         self.npc_balloons = []
@@ -337,18 +341,22 @@ class Engine:
 
         # 3. Christmas Tree (Unique Object)
         ct_h = self.get_height_at(0, 0)
-        self.tex_wood.bind(0)
-        self.shader.set_mat4("model", self.get_mat(0, ct_h, 0, 1, 2, 1))
-        self.cyl_mesh.draw(self.shader)
+        self.tex_christmas_tree.bind(0)
 
-        self.tex_leaf.bind(0)
-        # Stacked Cones
-        self.shader.set_mat4("model", self.get_mat(0, ct_h + 1.5, 0, 2.5, 2.5, 2.5))
-        self.cone_mesh.draw(self.shader)
-        self.shader.set_mat4("model", self.get_mat(0, ct_h + 3.0, 0, 2.0, 2.0, 2.0))
-        self.cone_mesh.draw(self.shader)
-        self.shader.set_mat4("model", self.get_mat(0, ct_h + 4.5, 0, 1.5, 1.5, 1.5))
-        self.cone_mesh.draw(self.shader)
+        # Scale настоить
+        scale_factor = 150.0
+
+        self.shader.set_mat4("model", self.get_mat(0, ct_h, 0, scale_factor, scale_factor, scale_factor))
+        self.christmas_tree_mesh.draw(self.shader)
+
+        # self.tex_leaf.bind(0)
+        # # Stacked Cones
+        # self.shader.set_mat4("model", self.get_mat(0, ct_h + 1.5, 0, 2.5, 2.5, 2.5))
+        # self.cone_mesh.draw(self.shader)
+        # self.shader.set_mat4("model", self.get_mat(0, ct_h + 3.0, 0, 2.0, 2.0, 2.0))
+        # self.cone_mesh.draw(self.shader)
+        # self.shader.set_mat4("model", self.get_mat(0, ct_h + 4.5, 0, 1.5, 1.5, 1.5))
+        # self.cone_mesh.draw(self.shader)
 
         # 4. Airship
         # Balloon

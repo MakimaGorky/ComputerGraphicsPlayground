@@ -26,9 +26,10 @@ class GeometryUtils:
                 z = r * depth_scale + offset_z
                 y = heightmap[r, c] * 5.0 # Height multiplier
 
+                tiling_scale = 100.0
                 # UVs (0.0 to 10.0 for tiling)
-                u = c / (cols - 1) * 10.0
-                v = r / (rows - 1) * 10.0
+                u = c / (cols - 1) * tiling_scale
+                v = r / (rows - 1) * tiling_scale
 
                 # Normals
                 h_l = heightmap[r, max(0, c-1)] * 5.0
@@ -285,3 +286,81 @@ class GeometryUtils:
         indices = [0, 1, 2, 0, 2, 3] # Base
         indices.extend([4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]) # Sides
         return vertices, indices
+
+    @staticmethod
+    def load_obj(filename, swap_yz=False):
+        """
+        Загружает OBJ файл.
+        swap_yz: Если модель лежит на боку (частая проблема экспорта), ставим True.
+        """
+        vertices = []
+        indices = []
+
+        # Временные списки для данных из файла
+        v_data = [] # Вершины
+        vt_data = [] # Текстурные координаты
+        vn_data = [] # Нормали
+
+        final_vertices = []
+
+        # Словарь для избежания дубликатов вершин (оптимизация)
+        # vertex_str -> index
+        unique_verts = {}
+        idx_counter = 0
+
+        try:
+            with open(filename, 'r') as f:
+                for line in f:
+                    if line.startswith('#'): continue
+                    vals = line.split()
+                    if not vals: continue
+
+                    if vals[0] == 'v':
+                        x, y, z = float(vals[1]), float(vals[2]), float(vals[3])
+                        if swap_yz:
+                            v_data.append([x, z, -y]) # Поворот осей
+                        else:
+                            v_data.append([x, y, z])
+
+                    elif vals[0] == 'vt':
+                        vt_data.append([float(vals[1]), float(vals[2])])
+
+                    elif vals[0] == 'vn':
+                        nx, ny, nz = float(vals[1]), float(vals[2]), float(vals[3])
+                        if swap_yz:
+                            vn_data.append([nx, nz, -ny])
+                        else:
+                            vn_data.append([nx, ny, nz])
+
+                    elif vals[0] == 'f':
+                        # Обрабатываем грани (обычно треугольники)
+                        # Формат f v/vt/vn v/vt/vn v/vt/vn
+                        for i in range(1, 4):
+                            w = vals[i].split('/')
+
+                            # Индексы в OBJ начинаются с 1, поэтому -1
+                            vi = int(w[0]) - 1
+                            vti = int(w[1]) - 1 if len(w) > 1 and w[1] else 0
+                            vni = int(w[2]) - 1 if len(w) > 2 and w[2] else 0
+
+                            # Ключ для уникальности
+                            key = (vi, vti, vni)
+
+                            if key not in unique_verts:
+                                unique_verts[key] = idx_counter
+                                idx_counter += 1
+
+                                # Собираем [x, y, z, nx, ny, nz, u, v]
+                                pos = v_data[vi]
+                                tex = vt_data[vti] if vt_data and vti < len(vt_data) else [0.0, 0.0]
+                                norm = vn_data[vni] if vn_data and vni < len(vn_data) else [0.0, 1.0, 0.0]
+
+                                final_vertices.extend(pos + norm + tex)
+
+                            indices.append(unique_verts[key])
+
+            return final_vertices, indices
+
+        except Exception as e:
+            print(f"Failed to load OBJ {filename}: {e}")
+            return GeometryUtils.generate_cube_v_i() # Fallback
